@@ -1,5 +1,7 @@
 'use client'
 
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard,
   FolderOpen,
@@ -21,12 +23,13 @@ import {
 } from 'lucide-react'
 
 const NAV_ITEMS = [
-  { label: 'Dashboard', icon: LayoutDashboard, active: true },
-  { label: 'My Files', icon: FolderOpen },
-  { label: 'Recent', icon: Clock },
-  { label: 'Favorites', icon: Star },
-  { label: 'Trash', icon: Trash2 },
-]
+  { label: 'Dashboard', icon: LayoutDashboard, path: '/', active: true },
+  { label: 'My Files', icon: FolderOpen, path: '/files' },
+  { label: 'Recent', icon: Clock, path: '/recent' },
+  { label: 'Favorites', icon: Star, path: '/favorites' },
+  { label: 'Trash', icon: Trash2, path: '/trash' },
+  { label: 'Settings', icon: Settings, path: '/settings/connection' },
+];
 
 const CATEGORIES = [
   { label: 'Documents', icon: FileText },
@@ -43,6 +46,7 @@ const SYSTEM = [
 ]
 
 export function Sidebar() {
+  const pathname = usePathname()
   return (
     <aside className="flex flex-col rounded-[1.5rem] bg-white/90 p-5 shadow-sm ring-1 ring-slate-200/70">
       <div>
@@ -52,19 +56,23 @@ export function Sidebar() {
 
       <nav className="mt-8 flex flex-1 flex-col gap-1 text-[13px] font-medium">
         <div className="mb-2 text-[10px] font-semibold tracking-widest text-slate-300 uppercase">Home</div>
-        {NAV_ITEMS.map((item) => (
-          <button
-            key={item.label}
-            className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-left transition-all duration-200 ${
-              item.active
-                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/25'
-                : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
-            }`}
-          >
-            <item.icon size={18} strokeWidth={item.active ? 2.2 : 1.8} />
-            {item.label}
-          </button>
-        ))}
+        {NAV_ITEMS.map((item) => {
+          const isActive = item.path === '/' ? pathname === '/' : pathname?.startsWith(item.path)
+          return (
+            <Link
+              key={item.label}
+              href={item.path}
+              className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-left transition-all duration-200 ${
+                isActive
+                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/25'
+                  : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
+              }`}
+            >
+              <item.icon size={18} strokeWidth={isActive ? 2.2 : 1.8} />
+              {item.label}
+            </Link>
+          )
+        })}
 
         <div className="mb-2 mt-6 text-[10px] font-semibold tracking-widest text-slate-300 uppercase">Categories</div>
         {CATEGORIES.map((item) => (
