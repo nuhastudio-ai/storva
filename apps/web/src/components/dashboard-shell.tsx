@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { Sidebar, HeroCard, StorageCards, RecentFilesTable, FoldersCard, RightPanel } from './dashboard'
 import { DevicePicker } from './device-picker'
 import { useDashboardData } from '@/lib/dashboard-data'
@@ -30,7 +31,7 @@ export function DashboardShell() {
                 Agent <span className="font-semibold">v{connection.version}</span> is behind the latest{' '}
                 <span className="font-semibold">v{connection.latestVersion}</span>.
               </span>
-              <a className="font-medium underline" href="/settings/connection">Update</a>
+              <Link className="font-medium underline" href="/settings/connection">Update</Link>
             </div>
           )}
           <HeroCard status={connection.status} />
