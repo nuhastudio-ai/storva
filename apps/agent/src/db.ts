@@ -5,8 +5,11 @@
  */
 import Database from 'better-sqlite3'
 import path from 'node:path'
+import { mkdirSync } from 'node:fs'
 
 const DB_PATH = process.env.STORVA_DB_PATH || path.join(process.cwd(), 'data', 'agent.db')
+
+mkdirSync(path.dirname(DB_PATH), { recursive: true })
 
 export const db = new Database(DB_PATH, { fileMustExist: false })
 
