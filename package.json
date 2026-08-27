@@ -1,0 +1,18 @@
+{
+  "name": "storva",
+  "private": true,
+  "scripts": {
+    "dev:web": "pnpm --filter @storva/web dev",
+    "dev:agent": "pnpm --filter @storva/agent dev",
+    "build": "pnpm --filter @storva/web build",
+    "lint": "turbo lint",
+    "test": "turbo test",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate deploy",
+    "prisma:seed": "ts-node prisma/seed.ts"
+  },
+  "devDependencies": {
+    "turbo": "^2"
+  },
+  "packageManager": "pnpm@11.24.0"
+}
