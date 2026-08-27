@@ -91,7 +91,7 @@ app.get('/version', (_req, res) => {
 })
 
 // 2. Storage stats by category
-app.get('/storage/stats', authenticateToken('read'), async (_req, res) => {
+app.get('/storage/stats', async (_req, res) => {
   try {
     const fsStats = await fsp.statfs(STORAGE_ROOT).catch(() => null)
     const categories: Record<string, number> = { documents: 0, images: 0, videos: 0, audio: 0, archives: 0, others: 0 }
