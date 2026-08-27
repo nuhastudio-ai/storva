@@ -15,27 +15,31 @@ async function getUserId(req: NextRequest): Promise<string | null> {
 
 // Map HTTP method to default scope (can be overridden by query ?scope=)
 // For simplicity, we grant all scopes; agent middleware will enforce per-endpoint.
-function getAllScopes(): string[] {
+function getAllScopes(): Array<'storage:read' | 'storage:write' | 'storage:delete' | 'storage:share'> {
   return ['storage:read', 'storage:write', 'storage:delete', 'storage:share']
 }
 
-export async function GET(req: NextRequest, { params }: { params: { path: string[] } }) {
-  return proxy(req, params)
+type Props = {
+  params: Promise<{ path: string[] }>
 }
-export async function POST(req: NextRequest, { params }: { params: { path: string[] } }) {
-  return proxy(req, params)
+
+export async function GET(req: NextRequest, props: Props) {
+  return proxy(req, await props.params)
 }
-export async function PUT(req: NextRequest, { params }: { params: { path: string[] } }) {
-  return proxy(req, params)
+export async function POST(req: NextRequest, props: Props) {
+  return proxy(req, await props.params)
 }
-export async function PATCH(req: NextRequest, { params }: { params: { path: string[] } }) {
-  return proxy(req, params)
+export async function PUT(req: NextRequest, props: Props) {
+  return proxy(req, await props.params)
 }
-export async function DELETE(req: NextRequest, { params }: { params: { path: string[] } }) {
-  return proxy(req, params)
+export async function PATCH(req: NextRequest, props: Props) {
+  return proxy(req, await props.params)
 }
-export async function HEAD(req: NextRequest, { params }: { params: { path: string[] } }) {
-  return proxy(req, params)
+export async function DELETE(req: NextRequest, props: Props) {
+  return proxy(req, await props.params)
+}
+export async function HEAD(req: NextRequest, props: Props) {
+  return proxy(req, await props.params)
 }
 
 async function proxy(req: NextRequest, params: { path: string[] }) {

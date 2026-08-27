@@ -7,6 +7,7 @@
     "incremental": true,
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    "baseUrl": ".",
     "plugins": [
       {
         "name": "next"
@@ -27,6 +28,9 @@
       ],
       "@storva/shared-auth": [
         "../../packages/shared-auth/src/index.ts"
+      ],
+      "@storva/shared-auth/totp": [
+        "../../packages/shared-auth/src/totp.ts"
       ]
     },
     "lib": [

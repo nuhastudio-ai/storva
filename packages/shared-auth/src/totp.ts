@@ -10,11 +10,12 @@ export const TOTPSetupSchema = z.object({
  * Generate a new TOTP secret for a user.
  * Returns the secret (base32) and an otpauth URL that can be rendered as QR code.
  */
-export function generateTOTPSecret(label: string, issuer = 'Storva'): TOTPSetupSchema {
+
+export function generateTOTPSecret(label: string, issuer = 'Storva'): z.infer<typeof TOTPSetupSchema> {
   const secret = speakeasy.generateSecret({ length: 20, name: label, issuer })
   return {
     secret: secret.base32,
-    otpauthUrl: secret.otpauth_url,
+    otpauthUrl: secret.otpauth_url!,
   }
 }
 

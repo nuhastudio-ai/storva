@@ -1,9 +1,10 @@
 import { repository } from '@/lib/repository'
 import { NextRequest, NextResponse } from 'next/server'
 
-export async function GET(_req: NextRequest, { params }: { params: { token: string } }) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
+  const { token } = await params
   try {
-    const share = await repository.shareLink.findUnique({ where: { token: params.token } })
+    const share = await repository.shareLink.findUnique({ where: { token } })
     if (!share) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     if (share.expiresAt && share.expiresAt < new Date()) {
       return NextResponse.json({ error: 'Expired' }, { status: 410 })

@@ -1,14 +1,40 @@
 # Panduan Instalasi & Deploy ke Vercel
 
-## 1. Persiapan Awal
+## 1. Persiapan Awal & Prasyarat Sistem
 
-Siapkan:
+Sebelum clone repositori, pastikan environment sudah siap.
 
-- Akun Vercel.
-- Git.
-- Node.js versi 18 atau lebih baru.
-- pnpm.
-- PostgreSQL eksternal, misalnya Supabase atau Railway.
+### 1.1. Install & Setup NVM (Node Version Manager)
+Gunakan Node.js v22. Jika belum ada, install NVM dan Node:
+- **Windows (nvm-windows):** Download dari [coreybutler/nvm-windows](https://github.com/coreybutler/nvm-windows/releases).
+- **Mac/Linux:** `curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash`
+
+Set Node ke v22:
+```bash
+nvm install 22
+nvm use 22
+```
+
+### 1.2. Install PNPM
+Setelah Node.js terinstall, pasang pnpm secara global:
+```bash
+npm install -g pnpm
+```
+
+### 1.3. Install Python & Visual C++ (Wajib untuk Windows)
+Beberapa dependensi Node memerlukan Python dan compiler C++:
+1. **Python:** Install dari web resmi atau Microsoft Store. Centang opsi **"Add Python to PATH"** saat instalasi.
+2. **Visual C++:** Install [Visual C++ Redistributable terbaru](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist) dan pastikan Anda memiliki **Visual Studio Build Tools** (opsi "Desktop development with C++").
+
+*Alternatif cepat di Windows (sebagai Administrator):*
+```powershell
+npm install --global windows-build-tools
+```
+
+### 1.4. Siapkan Akun & Database
+- **Akun Vercel** untuk hosting.
+- **Git** untuk version control.
+- **PostgreSQL eksternal**, misalnya Supabase atau Railway.
 
 ## 2. Clone Repositori
 

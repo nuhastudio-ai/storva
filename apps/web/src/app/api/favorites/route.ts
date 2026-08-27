@@ -12,7 +12,7 @@ export async function GET(req: Request) {
     })
 
     // BigInt serialization string conversion
-    const items = favorites.map((f) => ({ ...f, size: f.size.toString() }))
+    const items = favorites.map((f: any) => ({ ...f, size: f.size.toString() }))
     return Response.json({ items })
   } catch (err: any) {
     return Response.json({ error: err.message }, { status: 500 })

@@ -35,9 +35,18 @@ db.exec(`
     mime_type TEXT,
     checksum TEXT,
     modified_at INTEGER,
-    synced INTEGER NOT NULL DEFAULT 0
+    synced INTEGER NOT NULL DEFAULT 0,
+    is_favorite INTEGER NOT NULL DEFAULT 0
   );
 `)
+
+// Migration: add is_favorite column to file_cache if it doesn't exist yet
+// (needed for databases created before this column was added to the schema)
+const fileCacheColumns = db.prepare(`PRAGMA table_info(file_cache)`).all() as { name: string }[]
+const hasIsFavorite = fileCacheColumns.some((col) => col.name === 'is_favorite')
+if (!hasIsFavorite) {
+  db.exec(`ALTER TABLE file_cache ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0`)
+}
 
 // Sync queue helpers
 export const syncQueue = {

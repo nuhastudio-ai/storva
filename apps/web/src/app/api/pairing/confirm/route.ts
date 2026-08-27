@@ -13,7 +13,7 @@ export async function POST(req: Request) {
       take: 20,
     })
 
-    const match = recentCodes.find((row) => {
+    const match = recentCodes.find((row: any) => {
       if (!row.metadata) return false
       const meta = JSON.parse(row.metadata)
       return meta.code === code && new Date(meta.expiresAt).getTime() > Date.now()

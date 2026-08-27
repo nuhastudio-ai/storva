@@ -1,10 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 export default function SecurityPage() {
   const [token, setToken] = useState('')
-  const [userId] = useState(() => localStorage.getItem('storvaUserId') || '')
+  const [userId, setUserId] = useState('')
+  useEffect(() => {
+    setUserId(localStorage.getItem('storvaUserId') || '')
+  }, [])
   const [message, setMessage] = useState('')
 
   async function setup() {
