@@ -109,8 +109,8 @@ export function HeroCard({ status = 'online' as string }) {
   const label = online ? 'Local' : 'Offline'
   return (
     <header className="relative overflow-hidden rounded-[1.5rem] bg-gradient-to-br from-indigo-600 via-indigo-500 to-violet-500 p-6 text-white shadow-[0_20px_50px_rgba(79,70,229,0.28)] md:p-8">
-      <div className="absolute -right-8 -top-8 h-48 w-48 rounded-full bg-white/5" />
-      <div className="absolute -bottom-12 right-16 h-32 w-32 rounded-full bg-white/5" />
+      <div className="pointer-events-none absolute -right-8 -top-8 h-48 w-48 rounded-full bg-white/5" />
+      <div className="pointer-events-none absolute -bottom-12 right-16 h-32 w-32 rounded-full bg-white/5" />
       <div className="relative grid gap-6 md:grid-cols-[1.4fr_0.8fr]">
         <div>
           <p className="text-sm text-white/70">Hi, Ulin 👋</p>
