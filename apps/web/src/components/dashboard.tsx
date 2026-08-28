@@ -28,7 +28,6 @@ const NAV_ITEMS = [
   { label: 'Recent', icon: Clock, path: '/recent' },
   { label: 'Favorites', icon: Star, path: '/favorites' },
   { label: 'Trash', icon: Trash2, path: '/trash' },
-  { label: 'Settings', icon: Settings, path: '/settings/connection' },
 ];
 
 const CATEGORIES = [
@@ -40,10 +39,10 @@ const CATEGORIES = [
 ]
 
 const SYSTEM = [
-  { label: 'Storage', icon: HardDrive },
-  { label: 'Activity', icon: Activity },
-  { label: 'Settings', icon: Settings },
-]
+  { label: 'Storage', icon: HardDrive, path: '/settings/storage' },
+  { label: 'Activity', icon: Activity, path: '/settings/activity' },
+  { label: 'Settings', icon: Settings, path: '/settings/connection' },
+];
 
 export function Sidebar() {
   const pathname = usePathname()
