@@ -63,7 +63,7 @@ cp .env.example .env
 # DATABASE_URL not set - will use dev-db.json fallback
 SIGNING_PRIVATE_KEY="super-secret-signing-key-minimum-32-chars-long"
 STORVA_AGENT_URL="http://127.0.0.1:5125"
-NEXT_PUBLIC_APP_URL="http://localhost:3000"
+NEXT_PUBLIC_APP_URL="http://localhost:3125"
 STORVA_LATEST_AGENT_VERSION="0.1.0"
 STORVA_AGENT_DOWNLOAD_URL="https://storva.local/downloads/agent/latest"
 
@@ -104,7 +104,7 @@ pnpm dev:agent
 pnpm dev:web
 ```
 
-Pastikan kedua terminal berjalan tanpa error. Web app akan tersedia di `http://localhost:3000`.
+Pastikan kedua terminal berjalan tanpa error. Web app akan tersedia di `http://localhost:3125`.
 
 ## 7. Deployment ke Vercel
 

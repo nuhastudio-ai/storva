@@ -49,7 +49,7 @@ export function setupReconciliation(storageRoot: string) {
     const items: any[] = syncQueue.peek(10)
     if (items.length === 0) return
 
-    const cloudUrl = process.env.STORVA_CLOUD_URL || 'http://localhost:3000'
+    const cloudUrl = process.env.STORVA_CLOUD_URL || 'http://localhost:3125'
     for (const item of items) {
       try {
         const payload = JSON.parse(item.payload)
