@@ -10,14 +10,18 @@ export function setupReconciliation(storageRoot: string) {
 
   const watcher = chokidar.watch(storageRoot, {
     ignored: [
-      /(^|[\/\\])\./,             // dotfiles / hidden
-      /\.trash([\/\\]|$)/,        // .trash dir
-      /\.staging([\/\\]|$)/,      // .staging dir
-      /\.uploading\.tmp$/,        // temp upload files
+      /(^|[\/\\])\./,              // dotfiles / hidden
+      /\.trash([\/\\]|$)/,         // .trash dir
+      /\.staging([\/\\]|$)/,       // .staging dir
+      /\.uploading\.tmp$/,         // temp upload files
       WINDOWS_SYSTEM_DIRS_PATTERN, // Windows system-protected folders
     ],
     persistent: true,
-    ignoreInitial: false,
+    // TRUE: skip emitting 'add'/'addDir' for every pre-existing file on startup.
+    // FALSE here was the root cause of the reconciler loop — on a drive root like D:\
+    // it would scan thousands of existing files, flood the sync_queue, and keep
+    // retrying forever because the cloud URL is unreachable in a local-only setup.
+    ignoreInitial: true,
     awaitWriteFinish: {
       stabilityThreshold: 2000,
       pollInterval: 100,
@@ -58,18 +62,34 @@ export function setupReconciliation(storageRoot: string) {
 
   console.log(`[Reconciler] Watching: ${storageRoot}`)
 
-  // Background flusher: sync queued changes to cloud control plane
+  // Max retries before an item is considered undeliverable and dropped.
+  // Without this cap, items accumulate forever when the cloud is offline.
+  const MAX_RETRIES = 5
+
+  // Background flusher: sync queued changes to cloud control plane.
+  // Only runs when STORVA_CLOUD_URL is explicitly set — if it's not configured
+  // the cloud is intentionally absent (local-only mode) and we skip silently.
   const syncInterval = setInterval(async () => {
+    const cloudUrl = process.env.STORVA_CLOUD_URL
+    if (!cloudUrl) return // local-only mode — no cloud to sync to
+
     const items: any[] = syncQueue.peek(10)
     if (items.length === 0) return
 
-    const cloudUrl = process.env.STORVA_CLOUD_URL || 'http://localhost:3125'
     for (const item of items) {
+      // Drop items that have exceeded max retries to prevent infinite loops
+      if (item.retries >= MAX_RETRIES) {
+        console.warn(`[Reconciler:${path.basename(storageRoot)}] Dropping undeliverable event id=${item.id} (${item.retries} retries): ${item.payload}`)
+        syncQueue.remove(item.id)
+        continue
+      }
+
       try {
         const payload = JSON.parse(item.payload)
         const res = await fetch(`${cloudUrl}/api/activity`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          signal: AbortSignal.timeout(5000),
           body: JSON.stringify({
             userId: process.env.STORVA_DEV_USER_ID || 'dev-user',
             action: item.action,
@@ -82,6 +102,7 @@ export function setupReconciliation(storageRoot: string) {
           syncQueue.incrementRetry(item.id)
         }
       } catch {
+        // Cloud unreachable — increment retry and stop this batch
         syncQueue.incrementRetry(item.id)
         break
       }

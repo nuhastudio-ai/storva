@@ -56,19 +56,32 @@ export default function StorageSettingsPage() {
   const fetchVolumes = async () => {
     setLoading(true)
     try {
-      // 1. Check agent health for disk stats
+      // 1. Check agent health — this hits /health on the agent (no auth required)
+      //    and tells us whether the agent process is reachable at all.
       const healthRes = await fetch('/api/connection/health')
-      if (!healthRes.ok) throw new Error('Agent offline')
-      const health = await healthRes.json()
-      setAgentOnline(health.status === 'online')
+      const health = healthRes.ok ? await healthRes.json() : { status: 'offline' }
+      const online = health.status === 'online' || health.status === 'unhealthy'
+      setAgentOnline(online)
 
-      // health.agent.volumes has accessible + disk info
+      if (!online) {
+        setVolumes([])
+        return
+      }
+
+      // health.agent.volumes is populated by our updated /health endpoint and
+      // carries disk stats without a separate per-volume stats call.
       const healthVols: any[] = health?.agent?.volumes ?? []
       const diskMap = new Map(healthVols.map((v: any) => [v.id, v.disk]))
 
-      // 2. Fetch volume list from agent proxy
+      // 2. Fetch volume list via catch-all proxy (adds Bearer token automatically)
       const volRes = await fetch('/api/agent/volumes')
-      if (!volRes.ok) throw new Error('Failed to load volumes')
+      if (!volRes.ok) {
+        // 401 here means the agent is up but auth is misconfigured — still show online
+        // so user can see the error rather than a confusing "agent offline" message.
+        console.error('Failed to load volumes:', volRes.status, await volRes.text().catch(() => ''))
+        setVolumes([])
+        return
+      }
       const volData = await volRes.json()
 
       const merged: Volume[] = (volData.volumes ?? []).map((v: any) => ({
