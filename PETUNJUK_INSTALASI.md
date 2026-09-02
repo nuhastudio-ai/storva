@@ -59,6 +59,19 @@ Buat file environment lokal dari template:
 cp .env.example .env
 ```
 
+# Cloud Control Plane / Web
+# DATABASE_URL not set - will use dev-db.json fallback
+SIGNING_PRIVATE_KEY="super-secret-signing-key-minimum-32-chars-long"
+STORVA_AGENT_URL="http://127.0.0.1:5125"
+NEXT_PUBLIC_APP_URL="http://localhost:3000"
+STORVA_LATEST_AGENT_VERSION="0.1.0"
+STORVA_AGENT_DOWNLOAD_URL="https://storva.local/downloads/agent/latest"
+
+# Home PC Agent (Mac)
+STORVA_STORAGE_PATH="/tmp/Storva"
+STORVA_AGENT_PORT=5125
+STORVA_AGENT_HOST=127.0.0.1
+
 Isi nilai yang dibutuhkan di `.env`, terutama:
 - `SIGNING_PRIVATE_KEY` (minimal 32 karakter)
 - `STORVA_AGENT_URL` (misal `http://127.0.0.1:5125` untuk development)
