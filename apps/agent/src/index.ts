@@ -6,44 +6,105 @@ import path from 'node:path'
 import crypto from 'node:crypto'
 import multer from 'multer'
 import { resolveSafePath } from '@storva/validation'
-import { uploadSessions, syncQueue } from './db'
+import { uploadSessions, syncQueue, storageVolumes, MAX_VOLUMES, type StorageVolume } from './db'
 import { authenticateToken } from './middleware/auth'
 import { AGENT_CHANNEL, AGENT_VERSION, getAgentVersionInfo } from './version'
 
 const app = express()
 app.use(express.json())
 
-const STORAGE_ROOT = process.env.STORVA_STORAGE_PATH || path.join(process.cwd(), 'storage')
-const TRASH_DIR = path.join(STORAGE_ROOT, '.trash')
 const PORT = process.env.STORVA_AGENT_PORT || 5125
 
-// Ensure storage dirs exist. This must be awaited before anything (e.g. the
-// file watcher) tries to touch STORAGE_ROOT — otherwise a missing/unmounted
-// drive (like a Windows drive letter such as F:\) can crash the process.
-//
-// NOTE: STORAGE_ROOT may be a drive root (e.g. D:\) which already exists and
-// cannot be mkdir'd (EPERM on Windows). We handle that by checking existence
-// first and only creating when it does not already exist.
-let storagePathError: string | null = null
-async function ensureStorageDirs() {
+// ── Windows system folders always inaccessible even as Administrator ──────────
+const WINDOWS_SYSTEM_DIRS = new Set([
+  'System Volume Information',
+  '$Recycle.Bin',
+  '$RECYCLE.BIN',
+  'Recovery',
+  '$WinREAgent',
+  'Config.Msi',
+  'MSOCache',
+  'PerfLogs',
+])
+
+// ── Parse STORVA_STORAGE_PATHS (comma-separated, max 8) ──────────────────────
+// Falls back to legacy STORVA_STORAGE_PATH for backward compat.
+function parseStoragePaths(): string[] {
+  const multi = process.env.STORVA_STORAGE_PATHS
+  if (multi) {
+    return multi
+      .split(',')
+      .map((p) => p.trim())
+      .filter(Boolean)
+      .slice(0, MAX_VOLUMES)
+  }
+  const single = process.env.STORVA_STORAGE_PATH
+  if (single?.trim()) return [single.trim()]
+  return [path.join(process.cwd(), 'storage')]
+}
+
+// ── Per-volume initialisation ─────────────────────────────────────────────────
+// Returns map of volumeId → { root, trashDir, error }
+const volumeErrors = new Map<number, string | null>()
+
+async function ensureVolumeDir(vol: StorageVolume): Promise<string | null> {
+  const root = vol.storage_path
+  const trash = path.join(root, '.trash')
   try {
-    // Check if path already exists (e.g. a drive root like D:\)
-    const rootExists = await fsp.stat(STORAGE_ROOT).then(() => true).catch(() => false)
-    if (!rootExists) {
-      await fsp.mkdir(STORAGE_ROOT, { recursive: true })
-    }
-    // Confirm it's actually readable/writable
-    await fsp.access(STORAGE_ROOT, fs.constants.R_OK | fs.constants.W_OK)
-    // .trash must always be a real subdir — even on a drive root
-    await fsp.mkdir(TRASH_DIR, { recursive: true })
+    const rootExists = await fsp.stat(root).then(() => true).catch(() => false)
+    if (!rootExists) await fsp.mkdir(root, { recursive: true })
+    await fsp.access(root, fs.constants.R_OK | fs.constants.W_OK)
+    await fsp.mkdir(trash, { recursive: true })
+    return null
   } catch (err: any) {
-    storagePathError = err?.message || String(err)
-    console.error(`[Storva Agent] Cannot access storage path "${STORAGE_ROOT}":`, storagePathError)
-    console.error('[Storva Agent] Check that the drive/path exists, is mounted, and is accessible.')
+    return err?.message || String(err)
   }
 }
 
-// MIME type lookup (simple)
+async function initVolumes() {
+  // 1. Seed DB from env (idempotent)
+  const envPaths = parseStoragePaths()
+  storageVolumes.seed(envPaths)
+
+  // 2. Check accessibility for every registered volume
+  const all = storageVolumes.list()
+  for (const vol of all) {
+    if (!vol.enabled || !vol.storage_path) {
+      volumeErrors.set(vol.id, null)
+      continue
+    }
+    const err = await ensureVolumeDir(vol)
+    volumeErrors.set(vol.id, err)
+    if (err) {
+      console.error(`[Storva Agent] Volume #${vol.id} "${vol.label}" (${vol.storage_path}): ${err}`)
+    } else {
+      console.log(`[Storva Agent] Volume #${vol.id} "${vol.label}" → ${vol.storage_path} ✓`)
+    }
+  }
+}
+
+// ── Volume resolver helper ────────────────────────────────────────────────────
+// Accepts ?vol=<id> (numeric DB id). Falls back to first active volume.
+function resolveVolume(volParam: string | undefined): { vol: StorageVolume; error: string | null } | { vol: null; error: string } {
+  const active = storageVolumes.listActive()
+  if (active.length === 0) {
+    return { vol: null, error: 'No active storage volumes configured' }
+  }
+
+  if (volParam !== undefined) {
+    const id = parseInt(volParam, 10)
+    const found = storageVolumes.getById(id)
+    if (!found) return { vol: null, error: `Volume id=${id} not found` }
+    if (!found.enabled) return { vol: null, error: `Volume "${found.label}" is disabled` }
+    return { vol: found, error: volumeErrors.get(found.id) ?? null }
+  }
+
+  // Default: first active volume
+  const first = active[0]
+  return { vol: first, error: volumeErrors.get(first.id) ?? null }
+}
+
+// ── MIME helpers ──────────────────────────────────────────────────────────────
 const MIME_MAP: Record<string, string> = {
   '.pdf': 'application/pdf', '.doc': 'application/msword', '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   '.xls': 'application/vnd.ms-excel', '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -54,11 +115,9 @@ const MIME_MAP: Record<string, string> = {
   '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.ogg': 'audio/ogg', '.flac': 'audio/flac',
   '.zip': 'application/zip', '.rar': 'application/x-rar-compressed', '.7z': 'application/x-7z-compressed', '.tar': 'application/x-tar', '.gz': 'application/gzip',
 }
-
 function getMimeType(filename: string): string {
   return MIME_MAP[path.extname(filename).toLowerCase()] || 'application/octet-stream'
 }
-
 function getCategory(mime: string): string {
   if (mime.startsWith('image/')) return 'images'
   if (mime.startsWith('video/')) return 'videos'
@@ -68,56 +127,168 @@ function getCategory(mime: string): string {
   return 'others'
 }
 
-// Multer for streaming uploads
+// ── Multer: per-request storage root (vol-aware) ──────────────────────────────
 const diskStorage = multer.diskStorage({
   destination: (req, _file, cb) => {
     try {
-      const dir = resolveSafePath(STORAGE_ROOT, (req.query.path as string) || '')
+      const { vol, error } = resolveVolume(req.query.vol as string | undefined)
+      if (!vol) return cb(new Error(error as string), '')
+      const dir = resolveSafePath(vol.storage_path, (req.query.path as string) || '')
       cb(null, dir)
     } catch (err: any) {
       cb(err, '')
     }
   },
-  filename: (_req, file, cb) => {
-    cb(null, file.originalname)
-  },
+  filename: (_req, file, cb) => cb(null, file.originalname),
 })
 const upload = multer({ storage: diskStorage })
 
-// ---------- ENDPOINTS ----------
+// ══════════════════════════════════════════════════════════════════════════════
+// ENDPOINTS
+// ══════════════════════════════════════════════════════════════════════════════
 
-// 1. Health + Disk stats
+// ── 1. Health (all volumes) ───────────────────────────────────────────────────
 app.get('/health', async (_req, res) => {
-  try {
-    const stats = await fsp.statfs(STORAGE_ROOT).catch(() => null)
-    res.json({
-      status: 'online',
-      storageRoot: STORAGE_ROOT,
-      storageAccessible: storagePathError === null,
-      storageError: storagePathError,
-      timestamp: Date.now(),
-      version: AGENT_VERSION,
-      disk: stats
-        ? {
-            totalBytes: stats.bsize * stats.blocks,
-            freeBytes: stats.bsize * stats.bavail,
-            usedBytes: stats.bsize * (stats.blocks - stats.bavail),
-          }
-        : null,
+  const allVols = storageVolumes.list()
+  const volumes = await Promise.all(
+    allVols.map(async (vol) => {
+      const storedError = volumeErrors.get(vol.id)
+      let disk: object | null = null
+      if (vol.enabled && !storedError) {
+        disk = await fsp.statfs(vol.storage_path).then((s) => ({
+          totalBytes: s.bsize * s.blocks,
+          freeBytes: s.bsize * s.bavail,
+          usedBytes: s.bsize * (s.blocks - s.bavail),
+        })).catch(() => null)
+      }
+      return {
+        id: vol.id,
+        label: vol.label,
+        storagePath: vol.storage_path,
+        enabled: vol.enabled === 1,
+        accessible: vol.enabled === 1 && storedError === null,
+        error: storedError || null,
+        disk,
+      }
     })
-  } catch (err: any) {
-    res.status(500).json({ error: err.message })
+  )
+
+  // Legacy single-volume compat fields (first accessible volume)
+  const primary = volumes.find((v) => v.accessible) ?? volumes[0] ?? null
+  res.json({
+    status: primary?.accessible ? 'online' : 'degraded',
+    storageRoot: primary?.storagePath ?? null,
+    storageAccessible: primary?.accessible ?? false,
+    storageError: primary?.error ?? null,
+    timestamp: Date.now(),
+    version: AGENT_VERSION,
+    disk: primary?.disk ?? null,
+    volumes,
+  })
+})
+
+// ── 1b. Version ───────────────────────────────────────────────────────────────
+app.get('/version', (_req, res) => res.json(getAgentVersionInfo()))
+
+// ── 2. Volumes management (list / add / toggle / remove / relabel) ────────────
+app.get('/volumes', authenticateToken('read'), (_req, res) => {
+  const vols = storageVolumes.list().map((vol) => ({
+    id: vol.id,
+    label: vol.label,
+    storagePath: vol.storage_path,
+    enabled: vol.enabled === 1,
+    accessible: vol.enabled === 1 && (volumeErrors.get(vol.id) ?? null) === null,
+    error: volumeErrors.get(vol.id) ?? null,
+  }))
+  res.json({ volumes: vols, max: MAX_VOLUMES })
+})
+
+app.post('/volumes', authenticateToken('write'), async (req, res) => {
+  const { storagePath, label } = req.body as { storagePath?: string; label?: string }
+  if (!storagePath?.trim()) return res.status(400).json({ error: 'storagePath is required' })
+
+  const all = storageVolumes.list()
+  if (all.length >= MAX_VOLUMES) {
+    return res.status(400).json({ error: `Maximum ${MAX_VOLUMES} volumes reached` })
   }
+
+  const id = storageVolumes.add(storagePath.trim(), label?.trim())
+  if (id === null) return res.status(409).json({ error: 'This path is already registered' })
+
+  // Immediately try to init the new volume
+  const vol = storageVolumes.getById(id)!
+  const err = await ensureVolumeDir(vol)
+  volumeErrors.set(id, err)
+  if (err) console.error(`[Storva Agent] New volume #${id} "${vol.label}": ${err}`)
+
+  res.status(201).json({
+    id,
+    label: vol.label,
+    storagePath: vol.storage_path,
+    enabled: true,
+    accessible: err === null,
+    error: err,
+  })
 })
 
-// 1b. Version manifest (for update-notice UI). Public, no sensitive info.
-app.get('/version', (_req, res) => {
-  res.json(getAgentVersionInfo())
+app.patch('/volumes/:id', authenticateToken('write'), async (req, res) => {
+  const id = parseInt(req.params.id, 10)
+  const vol = storageVolumes.getById(id)
+  if (!vol) return res.status(404).json({ error: 'Volume not found' })
+
+  const { enabled, label } = req.body as { enabled?: boolean; label?: string }
+
+  if (typeof enabled === 'boolean') {
+    storageVolumes.setEnabled(id, enabled)
+    // If re-enabling, re-check accessibility
+    if (enabled) {
+      const err = await ensureVolumeDir(vol)
+      volumeErrors.set(id, err)
+    }
+  }
+  if (typeof label === 'string' && label.trim()) {
+    storageVolumes.setLabel(id, label.trim())
+  }
+
+  const updated = storageVolumes.getById(id)!
+  res.json({
+    id: updated.id,
+    label: updated.label,
+    storagePath: updated.storage_path,
+    enabled: updated.enabled === 1,
+    accessible: updated.enabled === 1 && (volumeErrors.get(id) ?? null) === null,
+    error: volumeErrors.get(id) ?? null,
+  })
 })
 
-// 2. Storage stats by category
-app.get('/storage/stats', async (_req, res) => {
+app.delete('/volumes/:id', authenticateToken('write'), (req, res) => {
+  const id = parseInt(req.params.id, 10)
+  const vol = storageVolumes.getById(id)
+  if (!vol) return res.status(404).json({ error: 'Volume not found' })
+
+  // Refuse to remove the last volume
+  const all = storageVolumes.list()
+  if (all.length <= 1) return res.status(400).json({ error: 'Cannot remove the last volume' })
+
+  storageVolumes.remove(id)
+  volumeErrors.delete(id)
+  res.json({ success: true, removed: id })
+})
+
+app.post('/volumes/reorder', authenticateToken('write'), (req, res) => {
+  const { ids } = req.body as { ids?: number[] }
+  if (!Array.isArray(ids)) return res.status(400).json({ error: 'ids array required' })
+  storageVolumes.reorder(ids)
+  res.json({ success: true })
+})
+
+// ── 3. Storage stats (per-volume) ─────────────────────────────────────────────
+app.get('/storage/stats', async (req, res) => {
+  const { vol, error } = resolveVolume(req.query.vol as string | undefined)
+  if (!vol) return res.status(400).json({ error })
+
   try {
+    const STORAGE_ROOT = vol.storage_path
     const fsStats = await fsp.statfs(STORAGE_ROOT).catch(() => null)
     const categories: Record<string, number> = { documents: 0, images: 0, videos: 0, audio: 0, archives: 0, others: 0 }
 
@@ -140,6 +311,9 @@ app.get('/storage/stats', async (_req, res) => {
     await walk(STORAGE_ROOT)
 
     res.json({
+      volumeId: vol.id,
+      volumeLabel: vol.label,
+      storagePath: STORAGE_ROOT,
       totalBytes: fsStats ? fsStats.bsize * fsStats.blocks : 0,
       freeBytes: fsStats ? fsStats.bsize * fsStats.bavail : 0,
       usedBytes: fsStats ? fsStats.bsize * (fsStats.blocks - fsStats.bavail) : 0,
@@ -151,22 +325,14 @@ app.get('/storage/stats', async (_req, res) => {
   }
 })
 
-// Windows system folders that are always inaccessible even as Administrator.
-// We skip these silently when listing a drive root to avoid EPERM crashes.
-const WINDOWS_SYSTEM_DIRS = new Set([
-  'System Volume Information',
-  '$Recycle.Bin',
-  '$RECYCLE.BIN',
-  'Recovery',
-  '$WinREAgent',
-  'Config.Msi',
-  'MSOCache',
-  'PerfLogs',
-])
-
-// 3. List files/folders
+// ── 4. List files/folders (per-volume) ────────────────────────────────────────
 app.get('/files', authenticateToken('read'), async (req, res) => {
+  const { vol, error } = resolveVolume(req.query.vol as string | undefined)
+  if (!vol) return res.status(400).json({ error })
+  if (error) return res.status(503).json({ error: `Volume "${vol.label}" is not accessible: ${error}` })
+
   try {
+    const STORAGE_ROOT = vol.storage_path
     const subPath = (req.query.path as string) || ''
     const targetDir = resolveSafePath(STORAGE_ROOT, subPath)
     const entries = await fsp.readdir(targetDir, { withFileTypes: true })
@@ -199,23 +365,26 @@ app.get('/files', authenticateToken('read'), async (req, res) => {
         })
     )
 
-    // Drop any entries that couldn't be stat'd (e.g. permission-denied junction points)
     const items = settled
       .filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled')
       .map((r) => r.value)
 
-    res.json({ path: subPath || '/', items })
+    res.json({ volumeId: vol.id, volumeLabel: vol.label, path: subPath || '/', items })
   } catch (err: any) {
     res.status(400).json({ error: err.message })
   }
 })
 
-// 4. Create folder
+// ── 5. Create folder (per-volume) ─────────────────────────────────────────────
 app.post('/folder', authenticateToken('write'), async (req, res) => {
+  const { vol, error } = resolveVolume(req.query.vol as string | undefined)
+  if (!vol) return res.status(400).json({ error })
+  if (error) return res.status(503).json({ error })
+
   try {
     const { dirPath, folderName } = req.body
     if (!folderName) return res.status(400).json({ error: 'Folder name required' })
-    const target = resolveSafePath(STORAGE_ROOT, path.join(dirPath || '', folderName))
+    const target = resolveSafePath(vol.storage_path, path.join(dirPath || '', folderName))
     await fsp.mkdir(target, { recursive: true })
     res.json({ success: true, created: folderName })
   } catch (err: any) {
@@ -223,23 +392,23 @@ app.post('/folder', authenticateToken('write'), async (req, res) => {
   }
 })
 
-// 5. Upload (multipart streaming)
+// ── 6. Upload (per-volume) ────────────────────────────────────────────────────
 app.post('/upload', authenticateToken('write'), upload.array('files'), (req, res) => {
   const uploaded = (req.files as Express.Multer.File[] | undefined) || []
-  res.json({
-    success: true,
-    count: uploaded.length,
-    files: uploaded.map((f) => ({ name: f.originalname, size: f.size })),
-  })
+  res.json({ success: true, count: uploaded.length, files: uploaded.map((f) => ({ name: f.originalname, size: f.size })) })
 })
 
-// 6. Download with Range support
+// ── 7. Download (per-volume) ──────────────────────────────────────────────────
 app.get('/download', authenticateToken('read'), async (req, res) => {
+  const { vol, error } = resolveVolume(req.query.vol as string | undefined)
+  if (!vol) return res.status(400).json({ error })
+  if (error) return res.status(503).json({ error })
+
   try {
     const filePath = req.query.path as string
     if (!filePath) return res.status(400).json({ error: 'Path required' })
 
-    const safeFile = resolveSafePath(STORAGE_ROOT, filePath)
+    const safeFile = resolveSafePath(vol.storage_path, filePath)
     const stats = await fsp.stat(safeFile)
     if (stats.isDirectory()) return res.status(400).json({ error: 'Cannot download directory' })
 
@@ -250,7 +419,6 @@ app.get('/download', authenticateToken('read'), async (req, res) => {
       const parts = range.replace(/bytes=/, '').split('-')
       const start = parseInt(parts[0], 10)
       const end = parts[1] ? parseInt(parts[1], 10) : stats.size - 1
-
       res.writeHead(206, {
         'Content-Range': `bytes ${start}-${end}/${stats.size}`,
         'Accept-Ranges': 'bytes',
@@ -272,13 +440,16 @@ app.get('/download', authenticateToken('read'), async (req, res) => {
   }
 })
 
-// 7. Rename
+// ── 8. Rename (per-volume) ────────────────────────────────────────────────────
 app.post('/rename', authenticateToken('write'), async (req, res) => {
+  const { vol, error } = resolveVolume(req.query.vol as string | undefined)
+  if (!vol) return res.status(400).json({ error })
+  if (error) return res.status(503).json({ error })
   try {
     const { filePath, newName } = req.body
     if (!filePath || !newName) return res.status(400).json({ error: 'filePath and newName required' })
-    const src = resolveSafePath(STORAGE_ROOT, filePath)
-    const dest = resolveSafePath(STORAGE_ROOT, path.join(path.dirname(filePath), newName))
+    const src = resolveSafePath(vol.storage_path, filePath)
+    const dest = resolveSafePath(vol.storage_path, path.join(path.dirname(filePath), newName))
     await fsp.rename(src, dest)
     res.json({ success: true, from: path.basename(src), to: newName })
   } catch (err: any) {
@@ -286,12 +457,15 @@ app.post('/rename', authenticateToken('write'), async (req, res) => {
   }
 })
 
-// 8. Move
+// ── 9. Move (per-volume) ──────────────────────────────────────────────────────
 app.post('/move', authenticateToken('write'), async (req, res) => {
+  const { vol, error } = resolveVolume(req.query.vol as string | undefined)
+  if (!vol) return res.status(400).json({ error })
+  if (error) return res.status(503).json({ error })
   try {
     const { sourcePath, destinationPath } = req.body
-    const src = resolveSafePath(STORAGE_ROOT, sourcePath)
-    const dest = resolveSafePath(STORAGE_ROOT, destinationPath)
+    const src = resolveSafePath(vol.storage_path, sourcePath)
+    const dest = resolveSafePath(vol.storage_path, destinationPath)
     await fsp.rename(src, dest)
     res.json({ success: true })
   } catch (err: any) {
@@ -299,12 +473,15 @@ app.post('/move', authenticateToken('write'), async (req, res) => {
   }
 })
 
-// 9. Copy (recursive for folders)
+// ── 10. Copy (per-volume) ─────────────────────────────────────────────────────
 app.post('/copy', authenticateToken('write'), async (req, res) => {
+  const { vol, error } = resolveVolume(req.query.vol as string | undefined)
+  if (!vol) return res.status(400).json({ error })
+  if (error) return res.status(503).json({ error })
   try {
     const { sourcePath, destinationPath } = req.body
-    const src = resolveSafePath(STORAGE_ROOT, sourcePath)
-    const dest = resolveSafePath(STORAGE_ROOT, destinationPath)
+    const src = resolveSafePath(vol.storage_path, sourcePath)
+    const dest = resolveSafePath(vol.storage_path, destinationPath)
     await fsp.cp(src, dest, { recursive: true })
     res.json({ success: true })
   } catch (err: any) {
@@ -312,14 +489,18 @@ app.post('/copy', authenticateToken('write'), async (req, res) => {
   }
 })
 
-// 10. Soft delete → .trash
+// ── 11. Soft delete → .trash (per-volume) ────────────────────────────────────
 app.post('/delete', authenticateToken('delete'), async (req, res) => {
+  const { vol, error } = resolveVolume(req.query.vol as string | undefined)
+  if (!vol) return res.status(400).json({ error })
+  if (error) return res.status(503).json({ error })
   try {
     const { filePath } = req.body
     if (!filePath) return res.status(400).json({ error: 'filePath required' })
-    const safeSource = resolveSafePath(STORAGE_ROOT, filePath)
-    const fileName = path.basename(safeSource)
-    const trashDest = path.join(TRASH_DIR, `${Date.now()}_${fileName}`)
+    const safeSource = resolveSafePath(vol.storage_path, filePath)
+    const trashDir = path.join(vol.storage_path, '.trash')
+    await fsp.mkdir(trashDir, { recursive: true })
+    const trashDest = path.join(trashDir, `${Date.now()}_${path.basename(safeSource)}`)
     await fsp.rename(safeSource, trashDest)
     res.json({ success: true, movedToTrash: true })
   } catch (err: any) {
@@ -327,47 +508,45 @@ app.post('/delete', authenticateToken('delete'), async (req, res) => {
   }
 })
 
-// 11. List trash
-app.get('/trash', authenticateToken('read'), async (_req, res) => {
+// ── 12. List trash (per-volume) ───────────────────────────────────────────────
+app.get('/trash', authenticateToken('read'), async (req, res) => {
+  const { vol, error } = resolveVolume(req.query.vol as string | undefined)
+  if (!vol) return res.status(400).json({ error })
+  if (error) return res.status(503).json({ error })
   try {
-    const entries = await fsp.readdir(TRASH_DIR, { withFileTypes: true })
+    const trashDir = path.join(vol.storage_path, '.trash')
+    await fsp.mkdir(trashDir, { recursive: true })
+    const entries = await fsp.readdir(trashDir, { withFileTypes: true })
     const items = await Promise.all(
       entries.map(async (entry) => {
-        const full = path.join(TRASH_DIR, entry.name)
+        const full = path.join(trashDir, entry.name)
         const st = await fsp.stat(full)
-        // Name format: timestamp_originalname
         const sep = entry.name.indexOf('_')
         const deletedAt = sep > 0 ? new Date(parseInt(entry.name.substring(0, sep), 10)) : st.mtime
         const originalName = sep > 0 ? entry.name.substring(sep + 1) : entry.name
-        return {
-          trashName: entry.name,
-          originalName,
-          isFolder: entry.isDirectory(),
-          size: st.size,
-          deletedAt,
-        }
+        return { trashName: entry.name, originalName, isFolder: entry.isDirectory(), size: st.size, deletedAt }
       })
     )
-    res.json({ items })
+    res.json({ volumeId: vol.id, items })
   } catch (err: any) {
     res.status(400).json({ error: err.message })
   }
 })
 
-// 12. Restore from trash
+// ── 13. Restore from trash (per-volume) ──────────────────────────────────────
 app.post('/trash/restore', authenticateToken('write'), async (req, res) => {
+  const { vol, error } = resolveVolume(req.query.vol as string | undefined)
+  if (!vol) return res.status(400).json({ error })
+  if (error) return res.status(503).json({ error })
   try {
     const { trashName, restorePath } = req.body
     if (!trashName) return res.status(400).json({ error: 'trashName required' })
-
-    const trashFile = path.join(TRASH_DIR, trashName)
-    // Verify trashFile is inside TRASH_DIR
-    if (!trashFile.startsWith(TRASH_DIR)) return res.status(400).json({ error: 'Invalid trash item' })
-
+    const trashDir = path.join(vol.storage_path, '.trash')
+    const trashFile = path.join(trashDir, trashName)
+    if (!trashFile.startsWith(trashDir)) return res.status(400).json({ error: 'Invalid trash item' })
     const sep = trashName.indexOf('_')
     const originalName = sep > 0 ? trashName.substring(sep + 1) : trashName
-    const dest = resolveSafePath(STORAGE_ROOT, path.join(restorePath || '', originalName))
-
+    const dest = resolveSafePath(vol.storage_path, path.join(restorePath || '', originalName))
     await fsp.rename(trashFile, dest)
     res.json({ success: true, restoredTo: dest })
   } catch (err: any) {
@@ -375,15 +554,17 @@ app.post('/trash/restore', authenticateToken('write'), async (req, res) => {
   }
 })
 
-// 13. Permanent delete from trash
+// ── 14. Permanent delete from trash (per-volume) ─────────────────────────────
 app.post('/trash/delete', authenticateToken('delete'), async (req, res) => {
+  const { vol, error } = resolveVolume(req.query.vol as string | undefined)
+  if (!vol) return res.status(400).json({ error })
+  if (error) return res.status(503).json({ error })
   try {
     const { trashName } = req.body
     if (!trashName) return res.status(400).json({ error: 'trashName required' })
-
-    const trashFile = path.join(TRASH_DIR, trashName)
-    if (!trashFile.startsWith(TRASH_DIR)) return res.status(400).json({ error: 'Invalid trash item' })
-
+    const trashDir = path.join(vol.storage_path, '.trash')
+    const trashFile = path.join(trashDir, trashName)
+    if (!trashFile.startsWith(trashDir)) return res.status(400).json({ error: 'Invalid trash item' })
     await fsp.rm(trashFile, { recursive: true, force: true })
     res.json({ success: true, permanentlyDeleted: true })
   } catch (err: any) {
@@ -391,12 +572,16 @@ app.post('/trash/delete', authenticateToken('delete'), async (req, res) => {
   }
 })
 
-// 14. Empty trash
-app.post('/trash/empty', authenticateToken('delete'), async (_req, res) => {
+// ── 15. Empty trash (per-volume) ──────────────────────────────────────────────
+app.post('/trash/empty', authenticateToken('delete'), async (req, res) => {
+  const { vol, error } = resolveVolume(req.query.vol as string | undefined)
+  if (!vol) return res.status(400).json({ error })
+  if (error) return res.status(503).json({ error })
   try {
-    const entries = await fsp.readdir(TRASH_DIR)
+    const trashDir = path.join(vol.storage_path, '.trash')
+    const entries = await fsp.readdir(trashDir).catch(() => [])
     for (const entry of entries) {
-      await fsp.rm(path.join(TRASH_DIR, entry), { recursive: true, force: true })
+      await fsp.rm(path.join(trashDir, entry), { recursive: true, force: true })
     }
     res.json({ success: true, cleared: entries.length })
   } catch (err: any) {
@@ -404,114 +589,107 @@ app.post('/trash/empty', authenticateToken('delete'), async (_req, res) => {
   }
 })
 
-// 15. File/folder info
+// ── 16. File info (per-volume) ────────────────────────────────────────────────
 app.get('/info', authenticateToken('read'), async (req, res) => {
+  const { vol, error } = resolveVolume(req.query.vol as string | undefined)
+  if (!vol) return res.status(400).json({ error })
+  if (error) return res.status(503).json({ error })
   try {
     const filePath = req.query.path as string
     if (!filePath) return res.status(400).json({ error: 'Path required' })
-    const safe = resolveSafePath(STORAGE_ROOT, filePath)
+    const safe = resolveSafePath(vol.storage_path, filePath)
     const st = await fsp.stat(safe)
     const mime = st.isDirectory() ? 'inode/directory' : getMimeType(safe)
-
-    // Compute SHA-256 for files only
     let checksum: string | null = null
     if (!st.isDirectory() && st.size < 100 * 1024 * 1024) {
-      // Only hash files < 100MB inline
       const buf = await fsp.readFile(safe)
       checksum = crypto.createHash('sha256').update(buf).digest('hex')
     }
-
     res.json({
-      name: path.basename(safe),
-      relativePath: filePath,
-      isFolder: st.isDirectory(),
-      size: st.size,
-      mimeType: mime,
-      category: st.isDirectory() ? 'folder' : getCategory(mime),
-      extension: path.extname(safe).replace('.', ''),
-      checksum,
-      createdAt: st.birthtime,
-      modifiedAt: st.mtime,
+      name: path.basename(safe), relativePath: filePath, isFolder: st.isDirectory(),
+      size: st.size, mimeType: mime, category: st.isDirectory() ? 'folder' : getCategory(mime),
+      extension: path.extname(safe).replace('.', ''), checksum, createdAt: st.birthtime, modifiedAt: st.mtime,
     })
   } catch (err: any) {
     res.status(400).json({ error: err.message })
   }
 })
 
-// 16. Search files
+// ── 17. Search (per-volume) ───────────────────────────────────────────────────
 app.get('/search', authenticateToken('read'), async (req, res) => {
+  const { vol, error } = resolveVolume(req.query.vol as string | undefined)
+  if (!vol) return res.status(400).json({ error })
+  if (error) return res.status(503).json({ error })
   try {
     const query = ((req.query.q as string) || '').toLowerCase()
     if (!query) return res.status(400).json({ error: 'Search query required' })
-
     const results: any[] = []
     const MAX_RESULTS = 50
-
     async function walk(dir: string, relDir: string) {
       if (results.length >= MAX_RESULTS) return
-      const entries = await fsp.readdir(dir, { withFileTypes: true })
+      const entries = await fsp.readdir(dir, { withFileTypes: true }).catch(() => [])
       for (const entry of entries) {
         if (results.length >= MAX_RESULTS) return
-        if (entry.name === '.trash') continue
+        if (entry.name === '.trash' || WINDOWS_SYSTEM_DIRS.has(entry.name)) continue
         const full = path.join(dir, entry.name)
         const rel = path.join(relDir, entry.name)
-
         if (entry.name.toLowerCase().includes(query)) {
-          const st = await fsp.stat(full)
-          results.push({
-            name: entry.name,
-            relativePath: rel,
-            isFolder: entry.isDirectory(),
-            size: st.size,
-            modifiedAt: st.mtime,
-          })
+          const st = await fsp.stat(full).catch(() => null)
+          if (st) results.push({ name: entry.name, relativePath: rel, isFolder: entry.isDirectory(), size: st.size, modifiedAt: st.mtime })
         }
-        if (entry.isDirectory()) {
-          await walk(full, rel)
-        }
+        if (entry.isDirectory()) await walk(full, rel)
       }
     }
-
-    await walk(STORAGE_ROOT, '')
-    res.json({ query, results, total: results.length })
+    await walk(vol.storage_path, '')
+    res.json({ query, volumeId: vol.id, results, total: results.length })
   } catch (err: any) {
     res.status(400).json({ error: err.message })
   }
 })
 
-
-// Resumable chunk upload: chunks write to .staging, final file appears atomically.
+// ── 18. Chunked upload session (per-volume) ───────────────────────────────────
 app.post('/upload/session', authenticateToken('write'), async (req, res) => {
+  const { vol, error } = resolveVolume(req.query.vol as string | undefined)
+  if (!vol) return res.status(400).json({ error })
+  if (error) return res.status(503).json({ error })
   try {
     const { relativePath, totalChunks, checksum } = req.body
     if (!relativePath || !Number.isInteger(totalChunks) || totalChunks < 1) return res.status(400).json({ error: 'Invalid upload session' })
     const id = crypto.randomUUID()
     uploadSessions.create(id, relativePath, totalChunks, checksum)
-    await fsp.mkdir(resolveSafePath(STORAGE_ROOT, path.join('.staging', id)), { recursive: true })
+    await fsp.mkdir(resolveSafePath(vol.storage_path, path.join('.staging', id)), { recursive: true })
     res.status(201).json({ uploadId: id })
   } catch (err: any) { res.status(400).json({ error: err.message }) }
 })
 
 app.post('/upload/chunk', authenticateToken('write'), express.raw({ type: 'application/octet-stream', limit: '100mb' }), async (req, res) => {
+  const { vol, error } = resolveVolume(req.query.vol as string | undefined)
+  if (!vol) return res.status(400).json({ error })
+  if (error) return res.status(503).json({ error })
   try {
     const id = req.query.uploadId as string
     const index = Number(req.query.index)
     const session: any = uploadSessions.get(id)
     if (!session || !Number.isInteger(index) || index < 0 || index >= session.total_chunks) return res.status(400).json({ error: 'Invalid chunk' })
-    const chunkPath = resolveSafePath(STORAGE_ROOT, path.join('.staging', id, String(index)))
+    const chunkPath = resolveSafePath(vol.storage_path, path.join('.staging', id, String(index)))
     await fsp.writeFile(chunkPath, req.body)
     uploadSessions.incrementChunk(id)
     const updated: any = uploadSessions.get(id)
     if (updated.received_chunks >= updated.total_chunks) {
-      const finalPath = resolveSafePath(STORAGE_ROOT, updated.relative_path)
+      const finalPath = resolveSafePath(vol.storage_path, updated.relative_path)
       await fsp.mkdir(path.dirname(finalPath), { recursive: true })
       const temp = `${finalPath}.uploading.tmp`
       const out = fs.createWriteStream(temp)
-      for (let i = 0; i < updated.total_chunks; i++) await new Promise<void>((resolve, reject) => fs.createReadStream(resolveSafePath(STORAGE_ROOT, path.join('.staging', id, String(i)))).pipe(out, { end: false }).on('finish', resolve).on('error', reject))
+      for (let i = 0; i < updated.total_chunks; i++) {
+        await new Promise<void>((resolve, reject) =>
+          fs.createReadStream(resolveSafePath(vol.storage_path, path.join('.staging', id, String(i))))
+            .pipe(out, { end: false }).on('finish', resolve).on('error', reject)
+        )
+      }
       out.end()
       await new Promise<void>((resolve, reject) => out.on('close', resolve).on('error', reject))
       await fsp.rename(temp, finalPath)
-      await fsp.rm(resolveSafePath(STORAGE_ROOT, path.join('.staging', id)), { recursive: true, force: true })
+      await fsp.rm(resolveSafePath(vol.storage_path, path.join('.staging', id)), { recursive: true, force: true })
       uploadSessions.complete(id)
       syncQueue.push('FILE_UPLOADED', { relativePath: updated.relative_path })
       return res.json({ success: true, completed: true })
@@ -520,57 +698,67 @@ app.post('/upload/chunk', authenticateToken('write'), express.raw({ type: 'appli
   } catch (err: any) { res.status(400).json({ error: err.message }) }
 })
 
-// Inline preview uses same safe stream and supports Range requests.
+// ── 19. Preview (per-volume) ──────────────────────────────────────────────────
 app.get('/preview', authenticateToken('read'), async (req, res) => {
+  const { vol, error } = resolveVolume(req.query.vol as string | undefined)
+  if (!vol) return res.status(400).json({ error })
+  if (error) return res.status(503).json({ error })
   try {
-    const safe = resolveSafePath(STORAGE_ROOT, req.query.path as string)
+    const safe = resolveSafePath(vol.storage_path, req.query.path as string)
     const stat = await fsp.stat(safe)
     res.type(getMimeType(safe)).set('Accept-Ranges', 'bytes').set('Content-Length', String(stat.size))
     fs.createReadStream(safe).pipe(res)
   } catch (err: any) { res.status(404).json({ error: err.message }) }
 })
 
-
+// ── 20. Thumbnail (per-volume) ────────────────────────────────────────────────
 import sharp from 'sharp'
-
 app.get('/thumbnail', authenticateToken('read'), async (req, res) => {
+  const { vol, error } = resolveVolume(req.query.vol as string | undefined)
+  if (!vol) return res.status(400).json({ error })
+  if (error) return res.status(503).json({ error })
   try {
-    const safe = resolveSafePath(STORAGE_ROOT, req.query.path as string)
+    const safe = resolveSafePath(vol.storage_path, req.query.path as string)
     const st = await fsp.stat(safe)
     if (st.isDirectory()) return res.status(400).json({ error: 'Not a file' })
     const buffer = await sharp(safe).resize(200, 200, { fit: 'cover' }).toBuffer()
     res.type('image/jpeg').send(buffer)
   } catch (err: any) { res.status(500).json({ error: err.message }) }
 })
-import { setupReconciliation } from './reconcile'
 
-let stopReconcile: () => void = () => {}
+// ── Reconciliation ────────────────────────────────────────────────────────────
+import { setupReconciliation } from './reconcile'
+const stopFns: Array<() => void> = []
 
 process.on('SIGINT', () => {
-  stopReconcile()
+  stopFns.forEach((fn) => fn())
   process.exit()
 })
 
+// ── Startup ───────────────────────────────────────────────────────────────────
 async function start() {
-  // Wait for the storage directory to actually exist/be accessible first.
-  await ensureStorageDirs()
+  await initVolumes()
 
-  // Only start the file watcher if the storage path is usable — watching an
-  // inaccessible/missing path (e.g. an unmounted Windows drive letter) is
-  // what previously crashed the whole agent.
-  if (storagePathError === null) {
-    stopReconcile = setupReconciliation(STORAGE_ROOT)
-  } else {
-    console.warn('[Storva Agent] Skipping file watcher/reconciliation — storage path is not accessible.')
+  // Start a watcher for each accessible active volume
+  const active = storageVolumes.listActive()
+  for (const vol of active) {
+    if (volumeErrors.get(vol.id) === null) {
+      stopFns.push(setupReconciliation(vol.storage_path))
+    } else {
+      console.warn(`[Storva Agent] Skipping watcher for volume #${vol.id} "${vol.label}" — not accessible`)
+    }
   }
 
   app.listen(PORT, () => {
+    const activeCount = active.filter((v) => volumeErrors.get(v.id) === null).length
     console.log(`Storva Agent v${AGENT_VERSION} (${AGENT_CHANNEL})`)
-    console.log(`  Port: ${PORT}`)
-    console.log(`  Storage: ${STORAGE_ROOT}`)
-    if (storagePathError) {
-      console.log(`  WARNING: storage path is not accessible (${storagePathError})`)
-    }
+    console.log(`  Port   : ${PORT}`)
+    console.log(`  Volumes: ${activeCount}/${active.length} accessible`)
+    active.forEach((v) => {
+      const err = volumeErrors.get(v.id)
+      const status = err ? `✗ ${err}` : '✓'
+      console.log(`    [${v.id}] ${v.label}  →  ${v.storage_path}  ${status}`)
+    })
   })
 }
 

@@ -10,10 +10,10 @@ export function setupReconciliation(storageRoot: string) {
 
   const watcher = chokidar.watch(storageRoot, {
     ignored: [
-      /(^|[\/\\])\./,           // dotfiles / hidden
-      /\.trash([\/\\]|$)/,      // .trash dir
-      /\.staging([\/\\]|$)/,    // .staging dir
-      /\.uploading\.tmp$/,      // temp upload files
+      /(^|[\/\\])\./,             // dotfiles / hidden
+      /\.trash([\/\\]|$)/,        // .trash dir
+      /\.staging([\/\\]|$)/,      // .staging dir
+      /\.uploading\.tmp$/,        // temp upload files
       WINDOWS_SYSTEM_DIRS_PATTERN, // Windows system-protected folders
     ],
     persistent: true,
@@ -31,17 +31,15 @@ export function setupReconciliation(storageRoot: string) {
     const relativePath = path.relative(storageRoot, fullPath)
     if (!relativePath || relativePath.startsWith('..')) return
 
-    // Cancel prior pending debounced event for this path
     if (pendingQueue.has(relativePath)) {
       clearTimeout(pendingQueue.get(relativePath)!.timer)
     }
 
     const timer = setTimeout(() => {
       pendingQueue.delete(relativePath)
-      // Push event into SQLite sync_queue for offline sync
       syncQueue.push(action, { relativePath, timestamp: Date.now() })
-      console.log(`[Reconciler] Enqueued event: ${action} on ${relativePath}`)
-    }, 500) // 500ms debounce
+      console.log(`[Reconciler:${path.basename(storageRoot)}] ${action} → ${relativePath}`)
+    }, 500)
 
     pendingQueue.set(relativePath, { action, relativePath, timer })
   }
@@ -53,15 +51,14 @@ export function setupReconciliation(storageRoot: string) {
     .on('addDir', (dirPath) => queueEvent('DIR_CREATED', dirPath))
     .on('unlinkDir', (dirPath) => queueEvent('DIR_DELETED', dirPath))
     .on('error', (err) => {
-      // IMPORTANT: without this handler, an unwatchable path (missing drive,
-      // permission denied, not yet mounted, etc.) throws an unhandled
-      // EventEmitter error and kills the whole agent process.
-      console.error(`[Reconciler] Watcher error on "${storageRoot}":`, err)
+      // Without this handler, an unwatchable path throws an unhandled EventEmitter
+      // error and kills the whole agent process.
+      console.error(`[Reconciler:${path.basename(storageRoot)}] Watcher error:`, err)
     })
 
-  console.log(`[Reconciler] Watching directory: ${storageRoot}`)
+  console.log(`[Reconciler] Watching: ${storageRoot}`)
 
-  // Background flusher job to attempt syncing queued changes to cloud control plane
+  // Background flusher: sync queued changes to cloud control plane
   const syncInterval = setInterval(async () => {
     const items: any[] = syncQueue.peek(10)
     if (items.length === 0) return
@@ -79,19 +76,17 @@ export function setupReconciliation(storageRoot: string) {
             metadata: JSON.stringify(payload),
           }),
         })
-
         if (res.ok) {
           syncQueue.remove(item.id)
         } else {
           syncQueue.incrementRetry(item.id)
         }
-      } catch (err) {
-        // Offline or cloud unreachable, keep in queue
+      } catch {
         syncQueue.incrementRetry(item.id)
-        break // Stop processing this batch if offline
+        break
       }
     }
-  }, 10000) // Every 10 seconds
+  }, 10000)
 
   return () => {
     watcher.close()
