@@ -20,13 +20,22 @@ const PORT = process.env.STORVA_AGENT_PORT || 5125
 // Ensure storage dirs exist. This must be awaited before anything (e.g. the
 // file watcher) tries to touch STORAGE_ROOT — otherwise a missing/unmounted
 // drive (like a Windows drive letter such as F:\) can crash the process.
+//
+// NOTE: STORAGE_ROOT may be a drive root (e.g. D:\) which already exists and
+// cannot be mkdir'd (EPERM on Windows). We handle that by checking existence
+// first and only creating when it does not already exist.
 let storagePathError: string | null = null
 async function ensureStorageDirs() {
   try {
-    await fsp.mkdir(STORAGE_ROOT, { recursive: true })
-    await fsp.mkdir(TRASH_DIR, { recursive: true })
-    // Confirm it's actually readable/writable, not just "created"
+    // Check if path already exists (e.g. a drive root like D:\)
+    const rootExists = await fsp.stat(STORAGE_ROOT).then(() => true).catch(() => false)
+    if (!rootExists) {
+      await fsp.mkdir(STORAGE_ROOT, { recursive: true })
+    }
+    // Confirm it's actually readable/writable
     await fsp.access(STORAGE_ROOT, fs.constants.R_OK | fs.constants.W_OK)
+    // .trash must always be a real subdir — even on a drive root
+    await fsp.mkdir(TRASH_DIR, { recursive: true })
   } catch (err: any) {
     storagePathError = err?.message || String(err)
     console.error(`[Storva Agent] Cannot access storage path "${STORAGE_ROOT}":`, storagePathError)
@@ -113,9 +122,9 @@ app.get('/storage/stats', async (_req, res) => {
     const categories: Record<string, number> = { documents: 0, images: 0, videos: 0, audio: 0, archives: 0, others: 0 }
 
     async function walk(dir: string) {
-      const entries = await fsp.readdir(dir, { withFileTypes: true })
+      const entries = await fsp.readdir(dir, { withFileTypes: true }).catch(() => [])
       for (const entry of entries) {
-        if (entry.name === '.trash') continue
+        if (entry.name === '.trash' || WINDOWS_SYSTEM_DIRS.has(entry.name)) continue
         const full = path.join(dir, entry.name)
         if (entry.isDirectory()) {
           await walk(full)
@@ -142,6 +151,19 @@ app.get('/storage/stats', async (_req, res) => {
   }
 })
 
+// Windows system folders that are always inaccessible even as Administrator.
+// We skip these silently when listing a drive root to avoid EPERM crashes.
+const WINDOWS_SYSTEM_DIRS = new Set([
+  'System Volume Information',
+  '$Recycle.Bin',
+  '$RECYCLE.BIN',
+  'Recovery',
+  '$WinREAgent',
+  'Config.Msi',
+  'MSOCache',
+  'PerfLogs',
+])
+
 // 3. List files/folders
 app.get('/files', authenticateToken('read'), async (req, res) => {
   try {
@@ -149,9 +171,15 @@ app.get('/files', authenticateToken('read'), async (req, res) => {
     const targetDir = resolveSafePath(STORAGE_ROOT, subPath)
     const entries = await fsp.readdir(targetDir, { withFileTypes: true })
 
-    const items = await Promise.all(
+    const settled = await Promise.allSettled(
       entries
-        .filter((e) => e.name !== '.trash' && e.name !== '.staging' && e.name !== '.DS_Store' && !e.name.endsWith('.uploading.tmp'))
+        .filter((e) =>
+          e.name !== '.trash' &&
+          e.name !== '.staging' &&
+          e.name !== '.DS_Store' &&
+          !e.name.endsWith('.uploading.tmp') &&
+          !WINDOWS_SYSTEM_DIRS.has(e.name)
+        )
         .map(async (entry) => {
           const full = path.join(targetDir, entry.name)
           const st = await fsp.stat(full)
@@ -170,6 +198,11 @@ app.get('/files', authenticateToken('read'), async (req, res) => {
           }
         })
     )
+
+    // Drop any entries that couldn't be stat'd (e.g. permission-denied junction points)
+    const items = settled
+      .filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled')
+      .map((r) => r.value)
 
     res.json({ path: subPath || '/', items })
   } catch (err: any) {
@@ -542,4 +575,3 @@ async function start() {
 }
 
 start()
-
