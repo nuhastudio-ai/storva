@@ -1,3 +1,4 @@
+import 'dotenv/config'
 import express from 'express'
 import fs from 'node:fs'
 import fsp from 'node:fs/promises'

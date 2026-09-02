@@ -75,8 +75,11 @@ STORVA_AGENT_HOST=127.0.0.1
 Isi nilai yang dibutuhkan di `.env`, terutama:
 - `SIGNING_PRIVATE_KEY` (minimal 32 karakter)
 - `STORVA_AGENT_URL` (misal `http://127.0.0.1:5125` untuk development)
-- `STORVA_STORAGE_PATH` (path folder storja lokal, contoh `D:\Storva` atau `/home/user/Storva`)
+- `STORVA_STORAGE_PATH` (path folder storja lokal, contoh `D:\Storva` atau `F:\XUE`)
 - `DATABASE_URL` (jika memakai PostgreSQL eksternal; kosongkan untuk mode dev tanpa DB)
+
+**Catatan Khusus Agent:**
+Agent mencari file `.env` di folder `apps/agent/.env`. Pastikan file tersebut ada agar path storage terbaca dengan benar.
 
 Jangan commit `.env` ke repositori.
 
