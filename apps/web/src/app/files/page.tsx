@@ -611,7 +611,7 @@ function FilesContent() {
           </div>
         </section>
 
-        <RightPanel />
+        <RightPanel volId={activeVol?.id} />
       </div>
 
       {/* NEW FOLDER MODAL */}
