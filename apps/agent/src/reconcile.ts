@@ -3,8 +3,19 @@ import path from 'node:path'
 import { syncQueue, fileCache } from './db'
 
 export function setupReconciliation(storageRoot: string) {
+  // Folders that are always EPERM-protected on Windows drive roots.
+  // Chokidar will throw unwatchable-path errors for these even as Administrator.
+  const WINDOWS_SYSTEM_DIRS_PATTERN =
+    /[\/\\](System Volume Information|\$Recycle\.Bin|\$RECYCLE\.BIN|Recovery|\$WinREAgent|Config\.Msi|MSOCache|PerfLogs)([\/\\]|$)/
+
   const watcher = chokidar.watch(storageRoot, {
-    ignored: /(^|[\/\\])\..|^\.trash|\.staging|\.uploading\.tmp$/, // ignore dotfiles, .trash, .staging, temp files
+    ignored: [
+      /(^|[\/\\])\./,           // dotfiles / hidden
+      /\.trash([\/\\]|$)/,      // .trash dir
+      /\.staging([\/\\]|$)/,    // .staging dir
+      /\.uploading\.tmp$/,      // temp upload files
+      WINDOWS_SYSTEM_DIRS_PATTERN, // Windows system-protected folders
+    ],
     persistent: true,
     ignoreInitial: false,
     awaitWriteFinish: {
