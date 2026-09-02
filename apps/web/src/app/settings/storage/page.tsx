@@ -1,24 +1,48 @@
 'use client'
 
-import { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Sidebar, RightPanel } from '@/components/dashboard'
-import { PlaceholderPage } from '@/components/placeholder-page'
-import { HardDrive, Folder, RefreshCw, AlertTriangle, CheckCircle2, Info } from 'lucide-react'
+import { HardDrive, Folder, RefreshCw, AlertTriangle, CheckCircle2, Info, AlertCircle } from 'lucide-react'
 
-// Note: In a real app, we would fetch this from the agent's /health endpoint
-// For now, we'll simulate the state
+function formatBytes(bytes: number = 0) {
+  if (!bytes) return '0 B'
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1)
+  return `${(bytes / 1024 ** i).toFixed(i ? 1 : 0)} ${units[i]}`
+}
+
 export default function StorageSettingsPage() {
-  const [isSaving, setIsSaving] = useState(false)
-  const [newPath, setNewPath] = useState('/tmp/storva-new')
-  const [currentPath] = useState('/tmp/Storva') // Mocking current path
+  const [loading, setLoading] = useState(true)
+  const [storageRoot, setStorageRoot] = useState<string>('')
+  const [diskStats, setDiskStats] = useState<{ totalBytes?: number; freeBytes?: number; usedBytes?: number } | null>(null)
+  const [agentStatus, setAgentStatus] = useState<'online' | 'offline'>('offline')
 
-  const handleSave = async () => {
-    setIsSaving(true)
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500))
-    setIsSaving(false)
-    alert('Configuration updated. Please restart the Storva Agent for changes to take effect.')
+  const fetchStorageInfo = async () => {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/connection/health')
+      if (res.ok) {
+        const data = await res.json()
+        if (data.status === 'online' && data.agent) {
+          setAgentStatus('online')
+          setStorageRoot(data.agent.storageRoot || '')
+          setDiskStats(data.agent.disk || null)
+        } else {
+          setAgentStatus('offline')
+        }
+      } else {
+        setAgentStatus('offline')
+      }
+    } catch {
+      setAgentStatus('offline')
+    } finally {
+      setLoading(false)
+    }
   }
+
+  useEffect(() => {
+    fetchStorageInfo()
+  }, [])
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_#eef2ff,_transparent_34%),linear-gradient(180deg,#f8fafc_0%,#eef2ff_100%)] p-3 text-slate-700 md:p-6">
@@ -28,82 +52,114 @@ export default function StorageSettingsPage() {
           <header className="flex items-center justify-between rounded-[1.5rem] bg-white p-6 shadow-sm ring-1 ring-slate-200/70">
             <div>
               <h1 className="text-2xl font-bold tracking-tight text-slate-800">Storage Configuration</h1>
-              <p className="mt-1 text-sm text-slate-500">Manage the root directory for all Storva data.</p>
+              <p className="mt-1 text-sm text-slate-500">View active storage directory and disk information.</p>
             </div>
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
-              <HardDrive size={24} />
-            </div>
+            <button
+              onClick={fetchStorageInfo}
+              title="Refresh Storage Info"
+              className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-indigo-600 shadow-sm transition hover:bg-slate-50"
+            >
+              <RefreshCw className={loading ? 'animate-spin' : ''} size={18} />
+            </button>
           </header>
 
           <div className="grid gap-6 md:grid-cols-2">
-            <div className="rounded-[1.5rem] bg-white p-6 shadow-sm ring-1 ring-slate-200/70">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
-                  <CheckCircle2 size={20} />
+            {/* Active Storage Location */}
+            <div className="rounded-[1.5rem] bg-white p-6 shadow-sm ring-1 ring-slate-200/70 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`flex h-10 w-10 items-center justify-center rounded-xl ${
+                      agentStatus === 'online' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'
+                    }`}
+                  >
+                    {agentStatus === 'online' ? <CheckCircle2 size={20} /> : <AlertCircle size={20} />}
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-slate-800">Active Storage Location</h3>
+                    <div className="text-xs text-slate-500">
+                      {agentStatus === 'online' ? 'Connected to Agent' : 'Agent Offline'}
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-semibold text-slate-800">Current Location</h3>
-                  <div className="text-xs text-slate-500">Active storage path</div>
+
+                <div className="mt-6 rounded-xl bg-slate-50 p-4">
+                  <div className="text-xs font-medium text-slate-400 uppercase tracking-wider">Storage Path</div>
+                  <div className="mt-1 font-mono text-sm font-semibold text-slate-800 break-all">
+                    {loading ? 'Reading storage path...' : storageRoot || 'No storage path detected'}
+                  </div>
                 </div>
               </div>
-              <div className="mt-6 rounded-xl bg-slate-50 p-4">
-                <div className="text-xs font-medium text-slate-400 uppercase tracking-wider">Path</div>
-                <div className="mt-1 font-mono text-sm text-slate-700 break-all">{currentPath}</div>
-              </div>
+
               <div className="mt-4 flex items-center gap-2 text-xs text-emerald-600">
                 <CheckCircle2 size={14} />
-                <span>Agent is actively watching this directory</span>
+                <span>
+                  {agentStatus === 'online'
+                    ? 'Agent is actively watching and synchronizing this directory'
+                    : 'Please start Agent to synchronize storage'}
+                </span>
               </div>
             </div>
 
+            {/* Disk Space Statistics */}
             <div className="rounded-[1.5rem] bg-white p-6 shadow-sm ring-1 ring-slate-200/70">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
-                  <Folder size={20} />
+                  <HardDrive size={20} />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-slate-800">Update Path</h3>
-                  <div className="text-xs text-slate-500">Change the root storage directory</div>
+                  <h3 className="font-semibold text-slate-800">Drive Space</h3>
+                  <div className="text-xs text-slate-500">Live disk utilization</div>
                 </div>
               </div>
-              <div className="mt-6 space-y-4">
-                <div>
-                  <label className="text-xs font-medium text-slate-400 uppercase">New Path</label>
-                  <input 
-                    type="text" 
-                    value={newPath}
-                    onChange={(e) => setNewPath(e.target.value)}
-                    className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none"
-                    placeholder="/path/to/storage"
-                  />
+
+              <div className="mt-6 space-y-3">
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-500">Total Capacity:</span>
+                  <span className="font-semibold text-slate-800">{formatBytes(diskStats?.totalBytes)}</span>
                 </div>
-                <button 
-                  onClick={handleSave}
-                  disabled={isSaving || newPath === currentPath}
-                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-50"
-                >
-                  {isSaving ? <RefreshCw className="animate-spin" size={18} /> : <CheckCircle2 size={18} />}
-                  {isSaving ? 'Updating...' : 'Update Storage'}
-                </button>
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-500">Used Space:</span>
+                  <span className="font-semibold text-indigo-600">{formatBytes(diskStats?.usedBytes)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-500">Available Free:</span>
+                  <span className="font-semibold text-emerald-600">{formatBytes(diskStats?.freeBytes)}</span>
+                </div>
+
+                {diskStats?.totalBytes && (
+                  <div className="mt-4">
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                      <div
+                        className="h-full rounded-full bg-indigo-600 transition-all duration-500"
+                        style={{
+                          width: `${Math.round(((diskStats.usedBytes || 0) / diskStats.totalBytes) * 100)}%`,
+                        }}
+                      />
+                    </div>
+                    <div className="mt-1.5 text-right text-xs text-slate-400">
+                      {Math.round(((diskStats.usedBytes || 0) / diskStats.totalBytes) * 100)}% used
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
 
-          <div className="rounded-[1.5rem] border border-amber-100 bg-amber-50/50 p-6 shadow-sm">
+          <div className="rounded-[1.5rem] border border-slate-200 bg-white p-6 shadow-sm">
             <div className="flex items-start gap-4">
-              <div className="mt-1 flex h-8 w-8 items-center justify-center rounded-full bg-amber-100 text-amber-600">
-                <AlertTriangle size={18} />
+              <div className="mt-1 flex h-8 w-8 items-center justify-center rounded-full bg-indigo-50 text-indigo-600">
+                <Info size={18} />
               </div>
               <div>
-                <h3 className="font-semibold text-amber-900">Important Note</h3>
-                <div className="mt-2 text-sm text-amber-800/80 leading-relaxed">
-                  Changing the storage path will not automatically move your existing files to the new location. 
-                  The agent will start using the new path from a clean state. 
-                  It is recommended to manually move your data if you wish to preserve it.
-                </div>
-                <div className="mt-4 flex items-center gap-2 text-xs font-medium text-amber-700">
-                  <Info size={14} />
-                  Agent restart will be required to apply changes.
+                <h3 className="font-semibold text-slate-800">How to change Path Storage</h3>
+                <div className="mt-2 text-sm text-slate-600 leading-relaxed space-y-2">
+                  <p>
+                    Path storage dikonfigurasi melalui environment variable <code className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs text-indigo-600">STORVA_STORAGE_PATH</code> pada file <code className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs">.env</code>.
+                  </p>
+                  <p>
+                    Setelah mengubah nilai <code className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs">STORVA_STORAGE_PATH</code>, restart Agent agar folder baru langsung aktif dan terbaca di sini.
+                  </p>
                 </div>
               </div>
             </div>
