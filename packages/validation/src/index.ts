@@ -10,7 +10,9 @@ export function resolveSafePath(storageRoot: string, userPath = ''): string {
   }
 
   const root = path.resolve(storageRoot)
-  const resolved = path.resolve(root, userPath)
+  // Strip leading slashes/backslashes so userPath is treated as relative to storage root
+  const sanitizedPath = userPath.replace(/^[/\\]+/, '')
+  const resolved = path.resolve(root, sanitizedPath)
   const relative = path.relative(root, resolved)
 
   if (relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative))) {

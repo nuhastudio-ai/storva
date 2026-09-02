@@ -14,7 +14,8 @@ function resolveSafePath(storageRoot, userPath = '') {
         throw new Error('Security Error: Absolute paths are not allowed');
     }
     const root = node_path_1.default.resolve(storageRoot);
-    const resolved = node_path_1.default.resolve(root, userPath);
+    const sanitizedPath = userPath.replace(/^[/\\]+/, '');
+    const resolved = node_path_1.default.resolve(root, sanitizedPath);
     const relative = node_path_1.default.relative(root, resolved);
     if (relative === '' || (!relative.startsWith('..') && !node_path_1.default.isAbsolute(relative))) {
         return resolved;

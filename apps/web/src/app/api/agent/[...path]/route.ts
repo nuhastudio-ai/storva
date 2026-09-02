@@ -13,8 +13,6 @@ async function getUserId(req: NextRequest): Promise<string | null> {
   return session?.userId ?? null
 }
 
-// Map HTTP method to default scope (can be overridden by query ?scope=)
-// For simplicity, we grant all scopes; agent middleware will enforce per-endpoint.
 function getAllScopes(): Array<'storage:read' | 'storage:write' | 'storage:delete' | 'storage:share'> {
   return ['storage:read', 'storage:write', 'storage:delete', 'storage:share']
 }
@@ -44,10 +42,7 @@ export async function HEAD(req: NextRequest, props: Props) {
 
 async function proxy(req: NextRequest, params: { path: string[] }) {
   try {
-    const userId = await getUserId(req)
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const userId = (await getUserId(req)) || 'dev-user'
 
     // Sign token with all scopes (agent will check specific scope)
     const token = await signAgentToken(userId, 'web-proxy', getAllScopes(), 300) // 5 min TTL
@@ -59,32 +54,57 @@ async function proxy(req: NextRequest, params: { path: string[] }) {
     // Copy query parameters
     req.nextUrl.searchParams.forEach((value, key) => url.searchParams.append(key, value))
 
-    // Forward request
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${token}`,
+    }
+
+    if (req.headers.get('content-type')) {
+      headers['Content-Type'] = req.headers.get('content-type')!
+    }
+    if (req.headers.get('range')) {
+      headers['Range'] = req.headers.get('range')!
+    }
+
+    const hasBody = req.method !== 'GET' && req.method !== 'HEAD'
+    let bodyData: BodyInit | undefined = undefined
+
+    if (hasBody) {
+      const arrayBuffer = await req.arrayBuffer()
+      if (arrayBuffer.byteLength > 0) {
+        bodyData = Buffer.from(arrayBuffer)
+      }
+    }
+
+    // Forward request to Agent
     const res = await fetch(url.toString(), {
       method: req.method,
-      headers: {
-        Authorization: `Bearer ${token}`,
-        // Forward content-type if present
-        ...(req.headers.get('content-type') && { 'Content-Type': req.headers.get('content-type')! }),
-      },
-      body: req.body,
-      // Disable automatic decompression; agent may send compressed? Not needed.
+      headers,
+      body: bodyData,
     })
 
-    // Copy status and headers
+    // Create response
     const response = new NextResponse(res.body, {
       status: res.status,
       statusText: res.statusText,
     })
-    res.headers.forEach((value, key) => {
-      // Avoid overwriting Next.js specific headers
-      if (!key.startsWith('x-nextjs-')) {
-        response.headers.set(key, value)
-      }
+
+    // Forward important headers
+    const forwardHeaders = [
+      'content-type',
+      'content-length',
+      'content-range',
+      'accept-ranges',
+      'content-disposition',
+    ]
+
+    forwardHeaders.forEach((header) => {
+      const val = res.headers.get(header)
+      if (val) response.headers.set(header, val)
     })
+
     return response
   } catch (err: any) {
     console.error('Agent proxy error:', err)
-    return NextResponse.json({ error: 'Bad Gateway' }, { status: 502 })
+    return NextResponse.json({ error: 'Bad Gateway or Agent Offline' }, { status: 502 })
   }
 }

@@ -135,13 +135,15 @@ app.get('/files', authenticateToken('read'), async (req, res) => {
 
     const items = await Promise.all(
       entries
-        .filter((e) => e.name !== '.trash')
+        .filter((e) => e.name !== '.trash' && e.name !== '.staging' && e.name !== '.DS_Store' && !e.name.endsWith('.uploading.tmp'))
         .map(async (entry) => {
           const full = path.join(targetDir, entry.name)
           const st = await fsp.stat(full)
           const mime = entry.isDirectory() ? 'inode/directory' : getMimeType(entry.name)
+          const relPath = path.relative(STORAGE_ROOT, full)
           return {
             name: entry.name,
+            relativePath: relPath,
             isFolder: entry.isDirectory(),
             size: st.size,
             mimeType: mime,
