@@ -17,9 +17,22 @@ const STORAGE_ROOT = process.env.STORVA_STORAGE_PATH || path.join(process.cwd(),
 const TRASH_DIR = path.join(STORAGE_ROOT, '.trash')
 const PORT = process.env.STORVA_AGENT_PORT || 5125
 
-// Ensure storage dirs exist
-fsp.mkdir(STORAGE_ROOT, { recursive: true }).catch(() => {})
-fsp.mkdir(TRASH_DIR, { recursive: true }).catch(() => {})
+// Ensure storage dirs exist. This must be awaited before anything (e.g. the
+// file watcher) tries to touch STORAGE_ROOT — otherwise a missing/unmounted
+// drive (like a Windows drive letter such as F:\) can crash the process.
+let storagePathError: string | null = null
+async function ensureStorageDirs() {
+  try {
+    await fsp.mkdir(STORAGE_ROOT, { recursive: true })
+    await fsp.mkdir(TRASH_DIR, { recursive: true })
+    // Confirm it's actually readable/writable, not just "created"
+    await fsp.access(STORAGE_ROOT, fs.constants.R_OK | fs.constants.W_OK)
+  } catch (err: any) {
+    storagePathError = err?.message || String(err)
+    console.error(`[Storva Agent] Cannot access storage path "${STORAGE_ROOT}":`, storagePathError)
+    console.error('[Storva Agent] Check that the drive/path exists, is mounted, and is accessible.')
+  }
+}
 
 // MIME type lookup (simple)
 const MIME_MAP: Record<string, string> = {
@@ -71,6 +84,8 @@ app.get('/health', async (_req, res) => {
     res.json({
       status: 'online',
       storageRoot: STORAGE_ROOT,
+      storageAccessible: storagePathError === null,
+      storageError: storagePathError,
       timestamp: Date.now(),
       version: AGENT_VERSION,
       disk: stats
@@ -496,17 +511,35 @@ app.get('/thumbnail', authenticateToken('read'), async (req, res) => {
 })
 import { setupReconciliation } from './reconcile'
 
-const storageRoot = STORAGE_ROOT
-const stopReconcile = setupReconciliation(storageRoot)
+let stopReconcile: () => void = () => {}
 
 process.on('SIGINT', () => {
   stopReconcile()
   process.exit()
 })
 
-app.listen(PORT, () => {
-  console.log(`Storva Agent v${AGENT_VERSION} (${AGENT_CHANNEL})`)
-  console.log(`  Port: ${PORT}`)
-  console.log(`  Storage: ${STORAGE_ROOT}`)
-})
+async function start() {
+  // Wait for the storage directory to actually exist/be accessible first.
+  await ensureStorageDirs()
+
+  // Only start the file watcher if the storage path is usable — watching an
+  // inaccessible/missing path (e.g. an unmounted Windows drive letter) is
+  // what previously crashed the whole agent.
+  if (storagePathError === null) {
+    stopReconcile = setupReconciliation(STORAGE_ROOT)
+  } else {
+    console.warn('[Storva Agent] Skipping file watcher/reconciliation — storage path is not accessible.')
+  }
+
+  app.listen(PORT, () => {
+    console.log(`Storva Agent v${AGENT_VERSION} (${AGENT_CHANNEL})`)
+    console.log(`  Port: ${PORT}`)
+    console.log(`  Storage: ${STORAGE_ROOT}`)
+    if (storagePathError) {
+      console.log(`  WARNING: storage path is not accessible (${storagePathError})`)
+    }
+  })
+}
+
+start()
 
