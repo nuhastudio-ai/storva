@@ -41,6 +41,12 @@ export function setupReconciliation(storageRoot: string) {
     .on('unlink', (filePath) => queueEvent('FILE_DELETED', filePath))
     .on('addDir', (dirPath) => queueEvent('DIR_CREATED', dirPath))
     .on('unlinkDir', (dirPath) => queueEvent('DIR_DELETED', dirPath))
+    .on('error', (err) => {
+      // IMPORTANT: without this handler, an unwatchable path (missing drive,
+      // permission denied, not yet mounted, etc.) throws an unhandled
+      // EventEmitter error and kills the whole agent process.
+      console.error(`[Reconciler] Watcher error on "${storageRoot}":`, err)
+    })
 
   console.log(`[Reconciler] Watching directory: ${storageRoot}`)
 
