@@ -1,0 +1,27 @@
+{
+  "users": [],
+  "sessions": [],
+  "devices": [],
+  "file_metadata": [],
+  "activities": [
+    {
+      "userId": "dev-user",
+      "action": "DIR_CREATED",
+      "metadata": "\"{\\\"relativePath\\\":\\\"Documents\\\",\\\"timestamp\\\":1788326364416}\"",
+      "id": "0e5dc642-3ad5-42d1-bd9a-fc1128e41fed",
+      "createdAt": "2026-09-02T05:19:27.500Z",
+      "updatedAt": "2026-09-02T05:19:27.500Z"
+    },
+    {
+      "userId": "dev-user",
+      "action": "DIR_CREATED",
+      "metadata": "\"{\\\"relativePath\\\":\\\"Documents/Projects\\\",\\\"timestamp\\\":1788326369430}\"",
+      "id": "e595f90f-146c-40ee-886b-bba6d46a8c35",
+      "createdAt": "2026-09-02T05:19:47.432Z",
+      "updatedAt": "2026-09-02T05:19:47.432Z"
+    }
+  ],
+  "upload_sessions": [],
+  "download_sessions": [],
+  "share_links": []
+}

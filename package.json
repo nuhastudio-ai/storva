@@ -2,6 +2,7 @@
   "name": "storva",
   "private": true,
   "scripts": {
+    "dev": "turbo dev",
     "dev:web": "pnpm --filter @storva/web dev",
     "dev:agent": "pnpm --filter @storva/agent dev",
     "build": "pnpm --filter @storva/web build",
