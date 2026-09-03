@@ -593,16 +593,34 @@ app.get('/preview', authenticateToken('read'), async (req, res) => {
   try {
     const safe = resolveSafePath(vol.storage_path, req.query.path as string)
     const stat = await fsp.stat(safe)
+    if (stat.isDirectory()) return res.status(400).json({ error: 'Cannot preview directory' })
     const mime = getMimeType(safe)
     const range = req.headers.range
     if (range) {
-      const [startStr, endStr] = range.replace(/bytes=/, '').split('-')
-      const start = parseInt(startStr, 10)
-      const end = endStr ? parseInt(endStr, 10) : stat.size - 1
-      res.writeHead(206, { 'Content-Range': `bytes ${start}-${end}/${stat.size}`, 'Accept-Ranges': 'bytes', 'Content-Length': end - start + 1, 'Content-Type': mime })
+      const match = /^bytes=(\d*)-(\d*)$/.exec(range)
+      if (!match || (!match[1] && !match[2])) {
+        res.set('Content-Range', `bytes */${stat.size}`)
+        return res.status(416).end()
+      }
+      let start = match[1] ? parseInt(match[1], 10) : stat.size - parseInt(match[2], 10)
+      let end = match[2] && match[1] ? parseInt(match[2], 10) : stat.size - 1
+      if (isNaN(start) || isNaN(end) || start > end || start < 0 || end >= stat.size) {
+        res.set('Content-Range', `bytes */${stat.size}`)
+        return res.status(416).end()
+      }
+      res.writeHead(206, {
+        'Content-Range': `bytes ${start}-${end}/${stat.size}`,
+        'Accept-Ranges': 'bytes',
+        'Content-Length': end - start + 1,
+        'Content-Type': mime,
+      })
       fs.createReadStream(safe, { start, end }).pipe(res)
     } else {
-      res.writeHead(200, { 'Content-Length': stat.size, 'Content-Type': mime, 'Accept-Ranges': 'bytes' })
+      res.writeHead(200, {
+        'Content-Length': stat.size,
+        'Content-Type': mime,
+        'Accept-Ranges': 'bytes',
+      })
       fs.createReadStream(safe).pipe(res)
     }
   } catch (err: any) { res.status(404).json({ error: err.message }) }
