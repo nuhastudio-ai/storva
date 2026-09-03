@@ -410,19 +410,12 @@ export function FoldersCard() {
   )
 }
 
-export function RightPanel({ volId }: { volId?: number } = {}) {
+export function RightPanel() {
   const [stats, setStats] = useState<any>(null)
   const [activities, setActivities] = useState<any[]>([])
 
   useEffect(() => {
-    // Build URL — forward volId if provided so stats reflect the active volume.
-    // If agent is offline or no volume is active yet, /api/storage/status returns
-    // 503; we catch that and leave stats as null (UI shows graceful fallback).
-    const url = volId != null
-      ? `/api/storage/status?vol=${volId}`
-      : '/api/storage/status'
-
-    fetch(url)
+    fetch('/api/storage/status')
       .then((r) => r.ok ? r.json() : null)
       .then((d) => setStats(d))
       .catch(() => {})
@@ -433,10 +426,9 @@ export function RightPanel({ volId }: { volId?: number } = {}) {
       .catch(() => {})
   }, [])
 
-  const usedBytes = stats?.usedBytes ?? 0
-  const totalBytes = stats?.totalBytes ?? 0
-  const percentUsed = Math.round(stats?.percentUsed ?? 0)
-  const storageReady = stats != null && totalBytes > 0
+  const usedBytes = stats?.usedBytes || 0
+  const totalBytes = stats?.totalBytes || 1
+  const percentUsed = Math.round(stats?.percentUsed || 0)
 
   return (
     <aside className="hidden rounded-[1.5rem] bg-white p-5 shadow-sm ring-1 ring-slate-200/70 md:flex md:flex-col">
@@ -450,30 +442,19 @@ export function RightPanel({ volId }: { volId?: number } = {}) {
 
       <div className="mt-6">
         <h3 className="text-sm font-semibold text-slate-800">Storage Drive</h3>
-        {storageReady ? (
-          <div
-            className="mt-4 mx-auto flex h-44 w-44 items-center justify-center rounded-full p-5"
-            style={{
-              background: `conic-gradient(#4f46e5 0% ${percentUsed}%, #e2e8f0 ${percentUsed}% 100%)`,
-            }}
-          >
-            <div className="flex h-full w-full items-center justify-center rounded-full bg-white shadow-inner">
-              <div className="text-center">
-                <div className="text-2xl font-bold text-indigo-600">{formatBytes(usedBytes)}</div>
-                <div className="text-[11px] text-slate-400">Used of {formatBytes(totalBytes)}</div>
-              </div>
+        <div
+          className="mt-4 mx-auto flex h-44 w-44 items-center justify-center rounded-full p-5"
+          style={{
+            background: `conic-gradient(#4f46e5 0% ${percentUsed}%, #e2e8f0 ${percentUsed}% 100%)`,
+          }}
+        >
+          <div className="flex h-full w-full items-center justify-center rounded-full bg-white shadow-inner">
+            <div className="text-center">
+              <div className="text-2xl font-bold text-indigo-600">{formatBytes(usedBytes)}</div>
+              <div className="text-[11px] text-slate-400">Used of {formatBytes(totalBytes)}</div>
             </div>
           </div>
-        ) : (
-          <div className="mt-4 mx-auto flex h-44 w-44 items-center justify-center rounded-full bg-slate-100 p-5">
-            <div className="flex h-full w-full items-center justify-center rounded-full bg-white shadow-inner">
-              <div className="text-center">
-                <div className="text-base font-semibold text-slate-400">—</div>
-                <div className="text-[11px] text-slate-400">Unavailable</div>
-              </div>
-            </div>
-          </div>
-        )}
+        </div>
       </div>
 
       <div className="mt-6">
@@ -504,15 +485,9 @@ export function RightPanel({ volId }: { volId?: number } = {}) {
           <HardDrive size={28} />
         </div>
         <div className="mt-3 text-sm font-semibold text-slate-700">
-          Storva Drive Status:{' '}
-          {storageReady
-            ? <span className="text-emerald-600 font-bold">Online</span>
-            : <span className="text-slate-400 font-bold">Offline</span>
-          }
+          Storva Drive Status: <span className="text-emerald-600 font-bold">Online</span>
         </div>
-        <p className="mt-1 text-xs text-slate-400">
-          {storageReady ? `${percentUsed}% disk used` : 'Agent not connected'}
-        </p>
+        <p className="mt-1 text-xs text-slate-400">{percentUsed}% disk used</p>
       </div>
     </aside>
   )
