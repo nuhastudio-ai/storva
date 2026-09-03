@@ -286,39 +286,31 @@ app.post('/volumes/reorder', authenticateToken('write'), (req, res) => {
 app.get('/storage/stats', async (req, res) => {
   const { vol, error } = resolveVolume(req.query.vol as string | undefined)
   if (!vol) return res.status(400).json({ error })
-
+  // Don't block on volumeError — statfs still works even if .trash mkdir failed
   try {
     const STORAGE_ROOT = vol.storage_path
+    // Use statfs only — instant OS call, no recursive walk.
+    // Walking an entire drive root (D:\) for byCategory takes minutes and causes
+    // the web route to timeout → 503. byCategory is now always empty here;
+    // a separate /storage/stats/deep endpoint can do the walk on demand.
     const fsStats = await fsp.statfs(STORAGE_ROOT).catch(() => null)
-    const categories: Record<string, number> = { documents: 0, images: 0, videos: 0, audio: 0, archives: 0, others: 0 }
-
-    async function walk(dir: string) {
-      const entries = await fsp.readdir(dir, { withFileTypes: true }).catch(() => [])
-      for (const entry of entries) {
-        if (entry.name === '.trash' || WINDOWS_SYSTEM_DIRS.has(entry.name)) continue
-        const full = path.join(dir, entry.name)
-        if (entry.isDirectory()) {
-          await walk(full)
-        } else {
-          const st = await fsp.stat(full).catch(() => null)
-          if (st) {
-            const cat = getCategory(getMimeType(entry.name))
-            categories[cat] += st.size
-          }
-        }
-      }
-    }
-    await walk(STORAGE_ROOT)
+    const totalBytes  = fsStats ? fsStats.bsize * fsStats.blocks : 0
+    const freeBytes   = fsStats ? fsStats.bsize * fsStats.bavail : 0
+    const usedBytes   = fsStats ? fsStats.bsize * (fsStats.blocks - fsStats.bavail) : 0
+    const percentUsed = totalBytes > 0
+      ? Math.round((usedBytes / totalBytes) * 10000) / 100
+      : 0
 
     res.json({
+      status: 'online',
       volumeId: vol.id,
       volumeLabel: vol.label,
       storagePath: STORAGE_ROOT,
-      totalBytes: fsStats ? fsStats.bsize * fsStats.blocks : 0,
-      freeBytes: fsStats ? fsStats.bsize * fsStats.bavail : 0,
-      usedBytes: fsStats ? fsStats.bsize * (fsStats.blocks - fsStats.bavail) : 0,
-      percentUsed: fsStats ? Math.round(((fsStats.blocks - fsStats.bavail) / fsStats.blocks) * 10000) / 100 : 0,
-      byCategory: categories,
+      totalBytes,
+      freeBytes,
+      usedBytes,
+      percentUsed,
+      byCategory: {},
     })
   } catch (err: any) {
     res.status(500).json({ error: err.message })
