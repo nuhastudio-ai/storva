@@ -208,17 +208,20 @@ function FilesContent() {
   // PhotoSwipe launcher
   const imageItems = useMemo(() => items.filter((i) => !i.isFolder && i.category === 'images'), [items])
 
-  const openPhotoSwipe = (targetItem: FileItem) => {
+  const openPhotoSwipe = async (targetItem: FileItem) => {
     const startIndex = imageItems.findIndex((i) => i.relativePath === targetItem.relativePath)
-    const dataSource = imageItems.map((img) => {
+    
+    // Load dimension asli
+    const dataSource = await Promise.all(imageItems.map(async (img) => {
       const src = addVolParam(`/api/agent/preview?path=${encodeURIComponent(img.relativePath)}`)
-      return {
-        src,
-        w: 1600,
-        h: 1200,
-        alt: img.name,
-      }
-    })
+      const dim = await new Promise<{w: number, h: number}>((resolve) => {
+        const i = new Image()
+        i.onload = () => resolve({ w: i.naturalWidth, h: i.naturalHeight })
+        i.onerror = () => resolve({ w: 1600, h: 1200 }) // fallback
+        i.src = src
+      })
+      return { src, w: dim.w, h: dim.h, alt: img.name }
+    }))
 
     const lightbox = new PhotoSwipeLightbox({
       dataSource,
