@@ -8,6 +8,12 @@ export function setupReconciliation(storageRoot: string) {
   const WINDOWS_SYSTEM_DIRS_PATTERN =
     /[\/\\](System Volume Information|\$Recycle\.Bin|\$RECYCLE\.BIN|Recovery|\$WinREAgent|Config\.Msi|MSOCache|PerfLogs)([\/\\]|$)/
 
+  // `ready` flips to true after chokidar finishes its initial scan.
+  // Events fired before ready (the startup scan of existing files) are
+  // intentionally discarded — we only want to queue *new* changes.
+  // This prevents flooding the sync_queue on a full drive root like D:\.
+  let watcherReady = false
+
   const watcher = chokidar.watch(storageRoot, {
     ignored: [
       /(^|[\/\\])\./,              // dotfiles / hidden
@@ -17,11 +23,9 @@ export function setupReconciliation(storageRoot: string) {
       WINDOWS_SYSTEM_DIRS_PATTERN, // Windows system-protected folders
     ],
     persistent: true,
-    // TRUE: skip emitting 'add'/'addDir' for every pre-existing file on startup.
-    // FALSE here was the root cause of the reconciler loop — on a drive root like D:\
-    // it would scan thousands of existing files, flood the sync_queue, and keep
-    // retrying forever because the cloud URL is unreachable in a local-only setup.
-    ignoreInitial: true,
+    // Keep false so chokidar builds its internal file tree (needed for accurate
+    // 'change' and 'unlink' events later). We gate on watcherReady instead.
+    ignoreInitial: false,
     awaitWriteFinish: {
       stabilityThreshold: 2000,
       pollInterval: 100,
@@ -32,6 +36,9 @@ export function setupReconciliation(storageRoot: string) {
   const pendingQueue = new Map<string, { action: string; relativePath: string; timer: NodeJS.Timeout }>()
 
   function queueEvent(action: string, fullPath: string) {
+    // Discard events from the initial scan — only queue real changes
+    if (!watcherReady) return
+
     const relativePath = path.relative(storageRoot, fullPath)
     if (!relativePath || relativePath.startsWith('..')) return
 
@@ -54,9 +61,11 @@ export function setupReconciliation(storageRoot: string) {
     .on('unlink', (filePath) => queueEvent('FILE_DELETED', filePath))
     .on('addDir', (dirPath) => queueEvent('DIR_CREATED', dirPath))
     .on('unlinkDir', (dirPath) => queueEvent('DIR_DELETED', dirPath))
+    .on('ready', () => {
+      watcherReady = true
+      console.log(`[Reconciler:${path.basename(storageRoot)}] Ready — watching for changes`)
+    })
     .on('error', (err) => {
-      // Without this handler, an unwatchable path throws an unhandled EventEmitter
-      // error and kills the whole agent process.
       console.error(`[Reconciler:${path.basename(storageRoot)}] Watcher error:`, err)
     })
 
