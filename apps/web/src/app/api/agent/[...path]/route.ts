@@ -2,11 +2,22 @@ import { repository } from '@/lib/repository'
 import { signAgentToken } from '@storva/shared-auth'
 import { NextRequest, NextResponse } from 'next/server'
 
-// Helper to get userId from session cookie
+// Timeout per request type (ms).
+// - LONG: uploads, downloads, chunked transfers — may take minutes
+// - SHORT: everything else (list, rename, delete, volumes, stats, health)
+const SHORT_TIMEOUT_MS = 8_000
+const LONG_TIMEOUT_MS  = 300_000
+
+const LONG_PATHS = new Set(['upload', 'download', 'preview', 'thumbnail'])
+
+function getTimeout(pathParts: string[]): number {
+  const first = pathParts[0] ?? ''
+  return LONG_PATHS.has(first) ? LONG_TIMEOUT_MS : SHORT_TIMEOUT_MS
+}
+
 async function getUserId(req: NextRequest): Promise<string | null> {
   const token = req.cookies.get('session')?.value
   if (!token) return null
-
   const session = await repository.session.findFirst({
     where: { tokenHash: token, expiresAt: { gte: new Date() } },
   })
@@ -17,93 +28,82 @@ function getAllScopes(): Array<'storage:read' | 'storage:write' | 'storage:delet
   return ['storage:read', 'storage:write', 'storage:delete', 'storage:share']
 }
 
-type Props = {
-  params: Promise<{ path: string[] }>
-}
+type Props = { params: Promise<{ path: string[] }> }
 
-export async function GET(req: NextRequest, props: Props) {
-  return proxy(req, await props.params)
-}
-export async function POST(req: NextRequest, props: Props) {
-  return proxy(req, await props.params)
-}
-export async function PUT(req: NextRequest, props: Props) {
-  return proxy(req, await props.params)
-}
-export async function PATCH(req: NextRequest, props: Props) {
-  return proxy(req, await props.params)
-}
-export async function DELETE(req: NextRequest, props: Props) {
-  return proxy(req, await props.params)
-}
-export async function HEAD(req: NextRequest, props: Props) {
-  return proxy(req, await props.params)
-}
+export async function GET(req: NextRequest, props: Props)    { return proxy(req, await props.params) }
+export async function POST(req: NextRequest, props: Props)   { return proxy(req, await props.params) }
+export async function PUT(req: NextRequest, props: Props)    { return proxy(req, await props.params) }
+export async function PATCH(req: NextRequest, props: Props)  { return proxy(req, await props.params) }
+export async function DELETE(req: NextRequest, props: Props) { return proxy(req, await props.params) }
+export async function HEAD(req: NextRequest, props: Props)   { return proxy(req, await props.params) }
 
 async function proxy(req: NextRequest, params: { path: string[] }) {
   try {
     const userId = (await getUserId(req)) || 'dev-user'
+    const token  = await signAgentToken(userId, 'web-proxy', getAllScopes(), 300)
 
-    // Sign token with all scopes (agent will check specific scope)
-    const token = await signAgentToken(userId, 'web-proxy', getAllScopes(), 300) // 5 min TTL
-
-    // Build target URL
     const agentUrl = process.env.STORVA_AGENT_URL || 'http://127.0.0.1:5125'
-    const path = params.path.length > 0 ? params.path.join('/') : ''
-    const url = new URL(`/${path}`, agentUrl)
-    // Copy query parameters
+    const pathStr  = params.path.length > 0 ? params.path.join('/') : ''
+    const url      = new URL(`/${pathStr}`, agentUrl)
+
     req.nextUrl.searchParams.forEach((value, key) => url.searchParams.append(key, value))
 
     const headers: Record<string, string> = {
       Authorization: `Bearer ${token}`,
     }
-
-    if (req.headers.get('content-type')) {
-      headers['Content-Type'] = req.headers.get('content-type')!
-    }
-    if (req.headers.get('range')) {
-      headers['Range'] = req.headers.get('range')!
-    }
+    if (req.headers.get('content-type')) headers['Content-Type'] = req.headers.get('content-type')!
+    if (req.headers.get('range'))        headers['Range']         = req.headers.get('range')!
 
     const hasBody = req.method !== 'GET' && req.method !== 'HEAD'
-    let bodyData: BodyInit | undefined = undefined
+    let bodyData: BodyInit | undefined
 
     if (hasBody) {
-      const arrayBuffer = await req.arrayBuffer()
-      if (arrayBuffer.byteLength > 0) {
-        bodyData = Buffer.from(arrayBuffer)
-      }
+      const ab = await req.arrayBuffer()
+      if (ab.byteLength > 0) bodyData = Buffer.from(ab)
     }
 
-    // Forward request to Agent
-    const res = await fetch(url.toString(), {
-      method: req.method,
-      headers,
-      body: bodyData,
-    })
+    // ── Per-request timeout — prevents the proxy hanging forever ─────────────
+    // UND_ERR_HEADERS_TIMEOUT was caused by the agent being busy (chokidar
+    // initial scan) while the proxy waited indefinitely. Now we abort after
+    // SHORT_TIMEOUT_MS (8 s) for normal requests so the UI gets a fast 502
+    // instead of a frozen spinner, and the user can retry once the agent is ready.
+    const timeoutMs = getTimeout(params.path)
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
 
-    // Create response
+    let res: Response
+    try {
+      res = await fetch(url.toString(), {
+        method:  req.method,
+        headers,
+        body:    bodyData,
+        signal:  controller.signal,
+      })
+    } finally {
+      clearTimeout(timer)
+    }
+
     const response = new NextResponse(res.body, {
-      status: res.status,
+      status:     res.status,
       statusText: res.statusText,
     })
 
-    // Forward important headers
     const forwardHeaders = [
-      'content-type',
-      'content-length',
-      'content-range',
-      'accept-ranges',
-      'content-disposition',
+      'content-type', 'content-length', 'content-range',
+      'accept-ranges', 'content-disposition',
     ]
-
-    forwardHeaders.forEach((header) => {
-      const val = res.headers.get(header)
-      if (val) response.headers.set(header, val)
+    forwardHeaders.forEach((h) => {
+      const val = res.headers.get(h)
+      if (val) response.headers.set(h, val)
     })
 
     return response
   } catch (err: any) {
+    // AbortError = our timeout fired — tell client agent is slow/busy
+    if (err?.name === 'AbortError') {
+      console.warn(`Agent proxy timeout: ${req.method} ${req.nextUrl.pathname}`)
+      return NextResponse.json({ error: 'Agent timeout — it may still be starting up' }, { status: 504 })
+    }
     console.error('Agent proxy error:', err)
     return NextResponse.json({ error: 'Bad Gateway or Agent Offline' }, { status: 502 })
   }
