@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useCallback, Suspense, useMemo, useRef } from 'react'
+import React, { useState, useEffect, useCallback, Suspense, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Sidebar, RightPanel } from '@/components/dashboard'
 import PhotoSwipeLightbox from 'photoswipe/lightbox'
@@ -201,9 +201,6 @@ function FilesContent() {
     setTimeout(() => setToast(null), 3500)
   }
 
-  // PDF Ref for EmbedPDF
-  const pdfContainerRef = useRef<HTMLDivElement>(null)
-  const [pdfLoadError, setPdfLoadError] = useState(false)
 
   // PhotoSwipe launcher
   const imageItems = useMemo(() => items.filter((i) => !i.isFolder && i.category === 'images'), [items])
@@ -232,40 +229,6 @@ function FilesContent() {
     lightbox.loadAndOpen(startIndex >= 0 ? startIndex : 0)
   }
 
-  // EmbedPDF init when previewing PDF
-  useEffect(() => {
-    if (previewItem && (previewItem.mimeType === 'application/pdf' || previewItem.name.toLowerCase().endsWith('.pdf'))) {
-      let activeViewer: any = null
-      let cancelled = false
-      setPdfLoadError(false)
-
-      import('@embedpdf/snippet').then((module) => {
-        if (cancelled || !pdfContainerRef.current) return
-        const EmbedPDF = module.default || module
-        const src = addVolParam(`/api/agent/preview?path=${encodeURIComponent(previewItem.relativePath)}`)
-        pdfContainerRef.current.innerHTML = ''
-        activeViewer = EmbedPDF.init({
-          type: 'container',
-          target: pdfContainerRef.current,
-          src,
-          wasmUrl: '/pdfium.wasm',
-          fontFallback: null,
-          fonts: { ui: null, signature: null },
-          stamp: { manifests: [], defaultLibrary: false },
-        })
-      }).catch((err) => {
-        console.error('EmbedPDF init error:', err)
-        if (!cancelled) setPdfLoadError(true)
-      })
-
-      return () => {
-        cancelled = true
-        if (activeViewer && typeof activeViewer.destroy === 'function') {
-          activeViewer.destroy()
-        }
-      }
-    }
-  }, [previewItem])
 
   // Click file handler
   const handleItemClick = (item: FileItem) => {
@@ -812,27 +775,11 @@ function FilesContent() {
                   <p className="text-sm text-slate-500">Image opening in viewer...</p>
                 </div>
               ) : previewItem.mimeType === 'application/pdf' || previewItem.name.toLowerCase().endsWith('.pdf') ? (
-                pdfLoadError ? (
-                  <div className="flex flex-col items-center justify-center gap-4 rounded-2xl bg-white p-10 text-center shadow-md">
-                    <FileText size={48} className="text-indigo-600" />
-                    <div>
-                      <h4 className="font-semibold text-slate-800">{previewItem.name}</h4>
-                      <p className="mt-1 text-xs text-slate-500">Preview PDF gagal dimuat.</p>
-                    </div>
-                    <a
-                      href={addVolParam(`/api/agent/download?path=${encodeURIComponent(previewItem.relativePath)}`)}
-                      download={previewItem.name}
-                      className="flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700"
-                    >
-                      <Download size={16} /> Download PDF
-                    </a>
-                  </div>
-                ) : (
-                  <div
-                    ref={pdfContainerRef}
-                    className="h-[70vh] w-full overflow-auto rounded-xl border border-slate-200 bg-white"
-                  />
-                )
+                <iframe
+                  src={addVolParam(`/api/agent/preview?path=${encodeURIComponent(previewItem.relativePath)}`)}
+                  className="h-[70vh] w-full rounded-xl border border-slate-200"
+                  title={previewItem.name}
+                />
               ) : previewItem.category === 'videos' ? (
                 <video controls autoPlay
                   src={addVolParam(`/api/agent/preview?path=${encodeURIComponent(previewItem.relativePath)}`)}
