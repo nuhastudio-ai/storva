@@ -1,3 +1,10 @@
+// Must be set before any fs async work happens (libuv reads it lazily on first
+// threadpool use, but we still want this as early as possible). Default is 4,
+// which is easily starved when statfs/chokidar/sharp/uploads all share it —
+// a single slow/disconnected volume can then make the whole agent look
+// "offline" even though the process is alive. Overridable via env.
+process.env.UV_THREADPOOL_SIZE = process.env.UV_THREADPOOL_SIZE || '16'
+
 import 'dotenv/config'
 import express from 'express'
 import fs from 'node:fs'
@@ -53,6 +60,20 @@ const MIME_MAP: Record<string, string> = {
 function getMimeType(filename: string): string {
   return MIME_MAP[path.extname(filename).toLowerCase()] || 'application/octet-stream'
 }
+// A statfs() (or any fs call) on a disconnected/sleeping/network volume can
+// hang indefinitely — there's no OS-level timeout. Race it against a timer so
+// one bad volume can't stall /health (and starve the threadpool for everyone
+// else, including the reconciler and other volumes' health checks).
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`timed out after ${ms}ms`)), ms)
+    promise.then(
+      (v) => { clearTimeout(timer); resolve(v) },
+      (e) => { clearTimeout(timer); reject(e) },
+    )
+  })
+}
+
 function getCategory(mime: string): string {
   if (mime.startsWith('image/')) return 'images'
   if (mime.startsWith('video/')) return 'videos'
@@ -86,7 +107,7 @@ async function initVolumes() {
     const err = await ensureVolumeDir(vol)
     volumeErrors.set(vol.id, err)
     if (err) console.error(`[Storva Agent] Volume #${vol.id} "${vol.label}" (${vol.storage_path}): ${err}`)
-    else      console.log(`[Storva Agent] Volume #${vol.id} "${vol.label}" → ${vol.storage_path} ✓`)
+    else console.log(`[Storva Agent] Volume #${vol.id} "${vol.label}" → ${vol.storage_path} ✓`)
   }
 }
 
@@ -129,11 +150,14 @@ app.get('/health', async (_req, res) => {
     const storedError = volumeErrors.get(vol.id)
     let disk: object | null = null
     if (vol.enabled && storedError === null) {
-      disk = await fsp.statfs(vol.storage_path).then((s) => ({
+      disk = await withTimeout(fsp.statfs(vol.storage_path), 2000).then((s) => ({
         totalBytes: s.bsize * s.blocks,
-        freeBytes:  s.bsize * s.bavail,
-        usedBytes:  s.bsize * (s.blocks - s.bavail),
+        freeBytes: s.bsize * s.bavail,
+        usedBytes: s.bsize * (s.blocks - s.bavail),
       })).catch(() => null)
+      // Note: on timeout the underlying statfs syscall may still be in flight
+      // on the libuv threadpool — we just stop waiting on it here so /health
+      // stays responsive. That's fine for a status check.
     }
     return {
       id: vol.id, label: vol.label, storagePath: vol.storage_path,
@@ -162,10 +186,10 @@ app.get('/storage/stats', async (req, res) => {
   const { vol, error } = resolveVolume(req.query.vol as string | undefined)
   if (!vol) return res.status(400).json({ error })
   try {
-    const fsStats = await fsp.statfs(vol.storage_path).catch(() => null)
-    const totalBytes  = fsStats ? fsStats.bsize * fsStats.blocks : 0
-    const freeBytes   = fsStats ? fsStats.bsize * fsStats.bavail : 0
-    const usedBytes   = fsStats ? fsStats.bsize * (fsStats.blocks - fsStats.bavail) : 0
+    const fsStats = await withTimeout(fsp.statfs(vol.storage_path), 2000).catch(() => null)
+    const totalBytes = fsStats ? fsStats.bsize * fsStats.blocks : 0
+    const freeBytes = fsStats ? fsStats.bsize * fsStats.bavail : 0
+    const usedBytes = fsStats ? fsStats.bsize * (fsStats.blocks - fsStats.bavail) : 0
     const percentUsed = totalBytes > 0 ? Math.round((usedBytes / totalBytes) * 10000) / 100 : 0
     res.json({
       status: 'online',
