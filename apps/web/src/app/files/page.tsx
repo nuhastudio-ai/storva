@@ -244,6 +244,10 @@ function FilesContent() {
           type: 'container',
           target: pdfContainerRef.current,
           src,
+          wasmUrl: '/pdfium.wasm',
+          fontFallback: null,
+          fonts: { ui: null, signature: null },
+          stamp: { manifests: [], defaultLibrary: false },
         })
       }).catch((err) => {
         console.error('EmbedPDF init error:', err)
