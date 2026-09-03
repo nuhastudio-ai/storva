@@ -51,12 +51,12 @@ function formatDate(dateStr: string) {
 function getItemIcon(item: FileItem, size = 24) {
   if (item.isFolder) return <Folder className="text-amber-500 fill-amber-100" size={size} />
   switch (item.category) {
-    case 'images':   return <ImageIcon className="text-rose-500" size={size} />
-    case 'videos':   return <Video className="text-amber-500" size={size} />
-    case 'audio':    return <Music className="text-violet-500" size={size} />
+    case 'images': return <ImageIcon className="text-rose-500" size={size} />
+    case 'videos': return <Video className="text-amber-500" size={size} />
+    case 'audio': return <Music className="text-violet-500" size={size} />
     case 'archives': return <Archive className="text-emerald-500" size={size} />
-    case 'documents':return <FileText className="text-blue-500" size={size} />
-    default:         return <File className="text-slate-400" size={size} />
+    case 'documents': return <FileText className="text-blue-500" size={size} />
+    default: return <File className="text-slate-400" size={size} />
   }
 }
 
@@ -92,9 +92,8 @@ function VolumeSwitcher({
             <button
               key={vol.id}
               onClick={() => { onChange(vol); setOpen(false) }}
-              className={`flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm transition hover:bg-slate-50 ${
-                activeVol?.id === vol.id ? 'text-indigo-700 font-semibold' : 'text-slate-700'
-              }`}
+              className={`flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm transition hover:bg-slate-50 ${activeVol?.id === vol.id ? 'text-indigo-700 font-semibold' : 'text-slate-700'
+                }`}
             >
               <HardDrive size={16} className={activeVol?.id === vol.id ? 'text-indigo-600' : 'text-slate-400'} />
               <div className="min-w-0">
@@ -204,17 +203,18 @@ function FilesContent() {
 
   // PDF Ref for EmbedPDF
   const pdfContainerRef = useRef<HTMLDivElement>(null)
+  const [pdfLoadError, setPdfLoadError] = useState(false)
 
   // PhotoSwipe launcher
   const imageItems = useMemo(() => items.filter((i) => !i.isFolder && i.category === 'images'), [items])
 
   const openPhotoSwipe = async (targetItem: FileItem) => {
     const startIndex = imageItems.findIndex((i) => i.relativePath === targetItem.relativePath)
-    
+
     // Load dimension asli
     const dataSource = await Promise.all(imageItems.map(async (img) => {
       const src = addVolParam(`/api/agent/preview?path=${encodeURIComponent(img.relativePath)}`)
-      const dim = await new Promise<{w: number, h: number}>((resolve) => {
+      const dim = await new Promise<{ w: number, h: number }>((resolve) => {
         const i = new Image()
         i.onload = () => resolve({ w: i.naturalWidth, h: i.naturalHeight })
         i.onerror = () => resolve({ w: 1600, h: 1200 }) // fallback
@@ -237,6 +237,7 @@ function FilesContent() {
     if (previewItem && (previewItem.mimeType === 'application/pdf' || previewItem.name.toLowerCase().endsWith('.pdf'))) {
       let activeViewer: any = null
       let cancelled = false
+      setPdfLoadError(false)
 
       import('@embedpdf/snippet').then((module) => {
         if (cancelled || !pdfContainerRef.current) return
@@ -254,6 +255,7 @@ function FilesContent() {
         })
       }).catch((err) => {
         console.error('EmbedPDF init error:', err)
+        if (!cancelled) setPdfLoadError(true)
       })
 
       return () => {
@@ -432,9 +434,8 @@ function FilesContent() {
     >
       {/* Toast */}
       {toast && (
-        <div className={`fixed top-6 right-6 z-50 flex items-center gap-3 rounded-2xl px-5 py-3 shadow-xl backdrop-blur-md ${
-          toast.type === 'success' ? 'bg-emerald-600/90 text-white' : 'bg-rose-600/90 text-white'
-        }`}>
+        <div className={`fixed top-6 right-6 z-50 flex items-center gap-3 rounded-2xl px-5 py-3 shadow-xl backdrop-blur-md ${toast.type === 'success' ? 'bg-emerald-600/90 text-white' : 'bg-rose-600/90 text-white'
+          }`}>
           {toast.type === 'success' ? <CheckCircle size={18} /> : <AlertCircle size={18} />}
           <span className="text-sm font-medium">{toast.message}</span>
         </div>
@@ -521,11 +522,10 @@ function FilesContent() {
                     {idx > 0 && <ChevronRight size={14} className="text-slate-300" />}
                     <button
                       onClick={() => navigateToFolder(crumb.path)}
-                      className={`flex items-center gap-1.5 rounded-lg px-2 py-1 transition ${
-                        isLast
+                      className={`flex items-center gap-1.5 rounded-lg px-2 py-1 transition ${isLast
                           ? 'bg-indigo-50 font-bold text-indigo-700'
                           : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'
-                      }`}
+                        }`}
                     >
                       {idx === 0 ? <HardDrive size={14} /> : null}
                       {crumb.name}
@@ -806,63 +806,64 @@ function FilesContent() {
                 <button onClick={() => setPreviewItem(null)} className="rounded-full p-2 text-slate-400 hover:bg-slate-100"><X size={20} /></button>
               </div>
             </div>
-              <div className="flex flex-1 items-center justify-center overflow-auto bg-slate-950/5 p-6 min-h-[500px]">
-                {previewItem.category === 'images' ? (
-                  <div className="flex items-center justify-center">
-                    <p className="text-sm text-slate-500">Image opening in viewer...</p>
-                  </div>
-                ) : previewItem.mimeType === 'application/pdf' || previewItem.name.toLowerCase().endsWith('.pdf') ? (
-                  <object
-                    data={addVolParam(`/api/agent/preview?path=${encodeURIComponent(previewItem.relativePath)}`)}
-                    type="application/pdf"
-                    className="h-[70vh] w-full rounded-xl border border-slate-200"
-                  >
-                    <div className="flex flex-col items-center justify-center gap-4 rounded-2xl bg-white p-10 text-center shadow-md">
-                      <FileText size={48} className="text-indigo-600" />
-                      <div>
-                        <h4 className="font-semibold text-slate-800">{previewItem.name}</h4>
-                        <p className="mt-1 text-xs text-slate-500">Preview PDF browser tidak didukung langsung.</p>
-                      </div>
-                      <a
-                        href={addVolParam(`/api/agent/download?path=${encodeURIComponent(previewItem.relativePath)}`)}
-                        download={previewItem.name}
-                        className="flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700"
-                      >
-                        <Download size={16} /> Download PDF
-                      </a>
-                    </div>
-                  </object>
-                ) : previewItem.category === 'videos' ? (
-                  <video controls autoPlay
-                    src={addVolParam(`/api/agent/preview?path=${encodeURIComponent(previewItem.relativePath)}`)}
-                    className="max-h-[65vh] max-w-full rounded-xl shadow-md"
-                  />
-                ) : previewItem.category === 'audio' ? (
-                  <div className="flex flex-col items-center gap-4 rounded-2xl bg-white p-8 shadow-md">
-                    <Music size={48} className="text-indigo-600" />
-                    <p className="font-semibold text-slate-700">{previewItem.name}</p>
-                    <audio controls autoPlay
-                      src={addVolParam(`/api/agent/preview?path=${encodeURIComponent(previewItem.relativePath)}`)}
-                      className="w-80"
-                    />
-                  </div>
-                ) : (
+            <div className="flex flex-1 items-center justify-center overflow-auto bg-slate-950/5 p-6 min-h-[500px]">
+              {previewItem.category === 'images' ? (
+                <div className="flex items-center justify-center">
+                  <p className="text-sm text-slate-500">Image opening in viewer...</p>
+                </div>
+              ) : previewItem.mimeType === 'application/pdf' || previewItem.name.toLowerCase().endsWith('.pdf') ? (
+                pdfLoadError ? (
                   <div className="flex flex-col items-center justify-center gap-4 rounded-2xl bg-white p-10 text-center shadow-md">
-                    {getItemIcon(previewItem)}
+                    <FileText size={48} className="text-indigo-600" />
                     <div>
                       <h4 className="font-semibold text-slate-800">{previewItem.name}</h4>
-                      <p className="mt-1 text-xs text-slate-500">Preview not available for this format.</p>
+                      <p className="mt-1 text-xs text-slate-500">Preview PDF gagal dimuat.</p>
                     </div>
                     <a
                       href={addVolParam(`/api/agent/download?path=${encodeURIComponent(previewItem.relativePath)}`)}
                       download={previewItem.name}
                       className="flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700"
                     >
-                      <Download size={16} /> Download File
+                      <Download size={16} /> Download PDF
                     </a>
                   </div>
-                )}
-              </div>
+                ) : (
+                  <div
+                    ref={pdfContainerRef}
+                    className="h-[70vh] w-full overflow-auto rounded-xl border border-slate-200 bg-white"
+                  />
+                )
+              ) : previewItem.category === 'videos' ? (
+                <video controls autoPlay
+                  src={addVolParam(`/api/agent/preview?path=${encodeURIComponent(previewItem.relativePath)}`)}
+                  className="max-h-[65vh] max-w-full rounded-xl shadow-md"
+                />
+              ) : previewItem.category === 'audio' ? (
+                <div className="flex flex-col items-center gap-4 rounded-2xl bg-white p-8 shadow-md">
+                  <Music size={48} className="text-indigo-600" />
+                  <p className="font-semibold text-slate-700">{previewItem.name}</p>
+                  <audio controls autoPlay
+                    src={addVolParam(`/api/agent/preview?path=${encodeURIComponent(previewItem.relativePath)}`)}
+                    className="w-80"
+                  />
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center gap-4 rounded-2xl bg-white p-10 text-center shadow-md">
+                  {getItemIcon(previewItem)}
+                  <div>
+                    <h4 className="font-semibold text-slate-800">{previewItem.name}</h4>
+                    <p className="mt-1 text-xs text-slate-500">Preview not available for this format.</p>
+                  </div>
+                  <a
+                    href={addVolParam(`/api/agent/download?path=${encodeURIComponent(previewItem.relativePath)}`)}
+                    download={previewItem.name}
+                    className="flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700"
+                  >
+                    <Download size={16} /> Download File
+                  </a>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
