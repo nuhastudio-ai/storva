@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { Sidebar, RightPanel } from '@/components/dashboard'
 import PhotoSwipeLightbox from 'photoswipe/lightbox'
 import 'photoswipe/style.css'
+import PdfViewer from '@/components/PdfViewer'
 import {
   FolderOpen, Folder, FolderPlus, Upload, Search, Grid,
   List as ListIcon, ChevronRight, Download, Trash2, Edit2,
@@ -775,10 +776,10 @@ function FilesContent() {
                   <p className="text-sm text-slate-500">Image opening in viewer...</p>
                 </div>
               ) : previewItem.mimeType === 'application/pdf' || previewItem.name.toLowerCase().endsWith('.pdf') ? (
-                <iframe
+                <PdfViewer
                   src={addVolParam(`/api/agent/preview?path=${encodeURIComponent(previewItem.relativePath)}`)}
-                  className="h-[70vh] w-full rounded-xl border border-slate-200"
-                  title={previewItem.name}
+                  fileName={previewItem.name}
+                  className="w-full"
                 />
               ) : previewItem.category === 'videos' ? (
                 <video controls autoPlay
