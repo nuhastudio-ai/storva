@@ -806,13 +806,32 @@ function FilesContent() {
                 <button onClick={() => setPreviewItem(null)} className="rounded-full p-2 text-slate-400 hover:bg-slate-100"><X size={20} /></button>
               </div>
             </div>
-              <div className="flex flex-1 items-center justify-center overflow-auto bg-slate-950/5 p-6 min-h-[300px]">
+              <div className="flex flex-1 items-center justify-center overflow-auto bg-slate-950/5 p-6 min-h-[500px]">
                 {previewItem.category === 'images' ? (
                   <div className="flex items-center justify-center">
                     <p className="text-sm text-slate-500">Image opening in viewer...</p>
                   </div>
                 ) : previewItem.mimeType === 'application/pdf' || previewItem.name.toLowerCase().endsWith('.pdf') ? (
-                  <div ref={pdfContainerRef} className="h-full w-full" />
+                  <object
+                    data={addVolParam(`/api/agent/preview?path=${encodeURIComponent(previewItem.relativePath)}`)}
+                    type="application/pdf"
+                    className="h-[70vh] w-full rounded-xl border border-slate-200"
+                  >
+                    <div className="flex flex-col items-center justify-center gap-4 rounded-2xl bg-white p-10 text-center shadow-md">
+                      <FileText size={48} className="text-indigo-600" />
+                      <div>
+                        <h4 className="font-semibold text-slate-800">{previewItem.name}</h4>
+                        <p className="mt-1 text-xs text-slate-500">Preview PDF browser tidak didukung langsung.</p>
+                      </div>
+                      <a
+                        href={addVolParam(`/api/agent/download?path=${encodeURIComponent(previewItem.relativePath)}`)}
+                        download={previewItem.name}
+                        className="flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700"
+                      >
+                        <Download size={16} /> Download PDF
+                      </a>
+                    </div>
+                  </object>
                 ) : previewItem.category === 'videos' ? (
                   <video controls autoPlay
                     src={addVolParam(`/api/agent/preview?path=${encodeURIComponent(previewItem.relativePath)}`)}
