@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from 'next/server'
 const SHORT_TIMEOUT_MS = 8_000
 const LONG_TIMEOUT_MS  = 300_000
 
-const LONG_PATHS = new Set(['upload', 'download', 'preview', 'thumbnail'])
+const LONG_PATHS = new Set(['upload', 'download', 'preview', 'thumbnail', 'files'])
 
 function getTimeout(pathParts: string[]): number {
   const first = pathParts[0] ?? ''

@@ -25,6 +25,6 @@ export async function GET(req: Request) {
     if (!response.ok) throw new Error(`Agent responded ${response.status}`)
     return Response.json(await response.json())
   } catch {
-    return Response.json({ status: 'offline', error: 'Storage unavailable' }, { status: 503 })
+    return Response.json({ status: 'offline', error: 'Storage unavailable', totalBytes: 0, usedBytes: 0, freeBytes: 0, percentUsed: 0 }, { status: 200 })
   }
 }
