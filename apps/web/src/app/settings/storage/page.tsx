@@ -53,47 +53,51 @@ export default function StorageSettingsPage() {
     setTimeout(() => setToast(null), 3500)
   }
 
-  const fetchVolumes = async () => {
-    setLoading(true)
+  const fetchVolumes = async (attempt = 1) => {
+    if (attempt === 1) setLoading(true)
     try {
-      // 1. Check agent health — this hits /health on the agent (no auth required)
-      //    and tells us whether the agent process is reachable at all.
-      const healthRes = await fetch('/api/connection/health')
+      // /api/connection/health hits agent /health directly — no auth needed, fast
+      const healthRes = await fetch('/api/connection/health', { signal: AbortSignal.timeout(6_000) })
       const health = healthRes.ok ? await healthRes.json() : { status: 'offline' }
-      const online = health.status === 'online' || health.status === 'unhealthy'
+      const online = health.status === 'online' || health.status === 'degraded'
       setAgentOnline(online)
 
       if (!online) {
-        setVolumes([])
+        // Agent not reachable yet — retry up to 5x (agent may still be booting)
+        if (attempt <= 5) {
+          setTimeout(() => fetchVolumes(attempt + 1), attempt * 2000)
+        } else {
+          setVolumes([])
+          setLoading(false)
+        }
         return
       }
 
-      // health.agent.volumes is populated by our updated /health endpoint and
-      // carries disk stats without a separate per-volume stats call.
       const healthVols: any[] = health?.agent?.volumes ?? []
       const diskMap = new Map(healthVols.map((v: any) => [v.id, v.disk]))
 
-      // 2. Fetch volume list via catch-all proxy (adds Bearer token automatically)
-      const volRes = await fetch('/api/agent/volumes')
+      const volRes = await fetch('/api/agent/volumes', { signal: AbortSignal.timeout(7_000) })
       if (!volRes.ok) {
-        // 401 here means the agent is up but auth is misconfigured — still show online
-        // so user can see the error rather than a confusing "agent offline" message.
-        console.error('Failed to load volumes:', volRes.status, await volRes.text().catch(() => ''))
+        console.error('Failed to load volumes:', volRes.status)
         setVolumes([])
+        setLoading(false)
         return
       }
       const volData = await volRes.json()
-
       const merged: Volume[] = (volData.volumes ?? []).map((v: any) => ({
         ...v,
         disk: diskMap.get(v.id) ?? null,
       }))
       setVolumes(merged)
     } catch (err: any) {
+      if (attempt <= 5) {
+        setTimeout(() => fetchVolumes(attempt + 1), attempt * 2000)
+        return
+      }
       setAgentOnline(false)
       setVolumes([])
     } finally {
-      setLoading(false)
+      if (attempt === 1 || attempt > 5) setLoading(false)
     }
   }
 
