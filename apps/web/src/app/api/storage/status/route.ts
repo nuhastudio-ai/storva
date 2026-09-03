@@ -1,8 +1,8 @@
 /**
  * /api/storage/status
- * Proxies to agent /storage/stats.
- * Accepts optional ?vol=<volumeId> — forwarded to agent.
- * Falls back to first active volume if omitted.
+ * Langsung fetch ke agent /storage/stats (tidak lewat catch-all proxy).
+ * Endpoint ini dipanggil oleh RightPanel dashboard — harus cepat.
+ * Memakai AbortSignal.timeout supaya tidak hang kalau agent lambat startup.
  */
 
 const AGENT_URL = process.env.STORVA_AGENT_URL || 'http://127.0.0.1:5125'
@@ -15,7 +15,13 @@ export async function GET(req: Request) {
     : `${AGENT_URL}/storage/stats`
 
   try {
-    const response = await fetch(url, { cache: 'no-store' })
+    // 6 second timeout — agent /storage/stats is now instant (statfs only).
+    // If it takes longer than this the agent is busy starting up; return
+    // offline rather than hanging the dashboard.
+    const response = await fetch(url, {
+      cache: 'no-store',
+      signal: AbortSignal.timeout(6_000),
+    })
     if (!response.ok) throw new Error(`Agent responded ${response.status}`)
     return Response.json(await response.json())
   } catch {
