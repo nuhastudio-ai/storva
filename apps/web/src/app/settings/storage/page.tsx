@@ -205,7 +205,7 @@ export default function StorageSettingsPage() {
             </div>
             <div className="flex items-center gap-2">
               <button
-                onClick={fetchVolumes}
+                onClick={() => fetchVolumes()}
                 title="Refresh"
                 className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-indigo-600 shadow-sm transition hover:bg-slate-50"
               >

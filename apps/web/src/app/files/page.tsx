@@ -1,14 +1,16 @@
 'use client'
 
-import React, { useState, useEffect, useCallback, Suspense } from 'react'
+import React, { useState, useEffect, useCallback, Suspense, useMemo, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Sidebar, RightPanel } from '@/components/dashboard'
+import PhotoSwipeLightbox from 'photoswipe/lightbox'
+import 'photoswipe/style.css'
 import {
   FolderOpen, Folder, FolderPlus, Upload, Search, Grid,
   List as ListIcon, ChevronRight, Download, Trash2, Edit2,
   FileText, Image as ImageIcon, Video, Music, Archive, File,
   X, Eye, RefreshCw, CheckCircle, AlertCircle, ArrowUpDown,
-  Home, HardDrive, ChevronDown,
+  HardDrive, ChevronDown,
 } from 'lucide-react'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -198,6 +200,77 @@ function FilesContent() {
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type })
     setTimeout(() => setToast(null), 3500)
+  }
+
+  // PDF Ref for EmbedPDF
+  const pdfContainerRef = useRef<HTMLDivElement>(null)
+
+  // PhotoSwipe launcher
+  const imageItems = useMemo(() => items.filter((i) => !i.isFolder && i.category === 'images'), [items])
+
+  const openPhotoSwipe = (targetItem: FileItem) => {
+    const startIndex = imageItems.findIndex((i) => i.relativePath === targetItem.relativePath)
+    const dataSource = imageItems.map((img) => {
+      const src = addVolParam(`/api/agent/preview?path=${encodeURIComponent(img.relativePath)}`)
+      return {
+        src,
+        w: 1600,
+        h: 1200,
+        alt: img.name,
+      }
+    })
+
+    const lightbox = new PhotoSwipeLightbox({
+      dataSource,
+      pswpModule: () => import('photoswipe'),
+    })
+
+    lightbox.init()
+    lightbox.loadAndOpen(startIndex >= 0 ? startIndex : 0)
+  }
+
+  // EmbedPDF init when previewing PDF
+  useEffect(() => {
+    if (previewItem && (previewItem.mimeType === 'application/pdf' || previewItem.name.toLowerCase().endsWith('.pdf'))) {
+      let activeViewer: any = null
+      let cancelled = false
+
+      import('@embedpdf/snippet').then((module) => {
+        if (cancelled || !pdfContainerRef.current) return
+        const EmbedPDF = module.default || module
+        const src = addVolParam(`/api/agent/preview?path=${encodeURIComponent(previewItem.relativePath)}`)
+        pdfContainerRef.current.innerHTML = ''
+        activeViewer = EmbedPDF.init({
+          type: 'container',
+          target: pdfContainerRef.current,
+          src,
+        })
+      }).catch((err) => {
+        console.error('EmbedPDF init error:', err)
+      })
+
+      return () => {
+        cancelled = true
+        if (activeViewer && typeof activeViewer.destroy === 'function') {
+          activeViewer.destroy()
+        }
+      }
+    }
+  }, [previewItem])
+
+  // Click file handler
+  const handleItemClick = (item: FileItem) => {
+    if (item.isFolder) {
+      navigateToFolder(item.relativePath)
+      return
+    }
+
+    if (item.category === 'images') {
+      openPhotoSwipe(item)
+      return
+    }
+
+    setPreviewItem(item)
   }
 
   // Build vol query string helper
@@ -534,11 +607,11 @@ function FilesContent() {
                 {filteredItems.map((item) => (
                   <div
                     key={item.relativePath || item.name}
-                    onDoubleClick={() => item.isFolder ? navigateToFolder(item.relativePath) : setPreviewItem(item)}
+                    onDoubleClick={() => handleItemClick(item)}
                     className="group relative flex flex-col justify-between rounded-[1.25rem] border border-slate-100 bg-slate-50/50 p-4 transition-all hover:border-indigo-200 hover:bg-white hover:shadow-md"
                   >
                     <div className="flex items-center justify-between">
-                      <div onClick={() => item.isFolder ? navigateToFolder(item.relativePath) : setPreviewItem(item)} className="cursor-pointer">
+                      <div onClick={() => handleItemClick(item)} className="cursor-pointer">
                         {getItemIcon(item)}
                       </div>
                       <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100">
@@ -567,7 +640,7 @@ function FilesContent() {
                       </div>
                     </div>
                     <div
-                      onClick={() => item.isFolder ? navigateToFolder(item.relativePath) : setPreviewItem(item)}
+                      onClick={() => handleItemClick(item)}
                       className="mt-3 cursor-pointer"
                     >
                       <p title={item.name} className="truncate text-sm font-semibold text-slate-800 group-hover:text-indigo-600">
@@ -597,7 +670,7 @@ function FilesContent() {
                       <tr key={item.relativePath || item.name} className="group transition hover:bg-slate-50/80">
                         <td className="py-3 pl-3">
                           <div
-                            onClick={() => item.isFolder ? navigateToFolder(item.relativePath) : setPreviewItem(item)}
+                            onClick={() => handleItemClick(item)}
                             className="flex cursor-pointer items-center gap-3 font-medium text-slate-700 group-hover:text-indigo-600"
                           >
                             {getItemIcon(item, 20)}
@@ -726,44 +799,44 @@ function FilesContent() {
                 <button onClick={() => setPreviewItem(null)} className="rounded-full p-2 text-slate-400 hover:bg-slate-100"><X size={20} /></button>
               </div>
             </div>
-            <div className="flex flex-1 items-center justify-center overflow-auto bg-slate-950/5 p-6 min-h-[300px]">
-              {previewItem.category === 'images' ? (
-                <img
-                  src={addVolParam(`/api/agent/preview?path=${encodeURIComponent(previewItem.relativePath)}`)}
-                  alt={previewItem.name}
-                  className="max-h-[65vh] max-w-full rounded-xl object-contain shadow-md"
-                />
-              ) : previewItem.category === 'videos' ? (
-                <video controls autoPlay
-                  src={addVolParam(`/api/agent/preview?path=${encodeURIComponent(previewItem.relativePath)}`)}
-                  className="max-h-[65vh] max-w-full rounded-xl shadow-md"
-                />
-              ) : previewItem.category === 'audio' ? (
-                <div className="flex flex-col items-center gap-4 rounded-2xl bg-white p-8 shadow-md">
-                  <Music size={48} className="text-indigo-600" />
-                  <p className="font-semibold text-slate-700">{previewItem.name}</p>
-                  <audio controls autoPlay
-                    src={addVolParam(`/api/agent/preview?path=${encodeURIComponent(previewItem.relativePath)}`)}
-                    className="w-80"
-                  />
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center gap-4 rounded-2xl bg-white p-10 text-center shadow-md">
-                  {getItemIcon(previewItem)}
-                  <div>
-                    <h4 className="font-semibold text-slate-800">{previewItem.name}</h4>
-                    <p className="mt-1 text-xs text-slate-500">Preview not available for this format.</p>
+              <div className="flex flex-1 items-center justify-center overflow-auto bg-slate-950/5 p-6 min-h-[300px]">
+                {previewItem.category === 'images' ? (
+                  <div className="flex items-center justify-center">
+                    <p className="text-sm text-slate-500">Image opening in viewer...</p>
                   </div>
-                  <a
-                    href={addVolParam(`/api/agent/download?path=${encodeURIComponent(previewItem.relativePath)}`)}
-                    download={previewItem.name}
-                    className="flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700"
-                  >
-                    <Download size={16} /> Download File
-                  </a>
-                </div>
-              )}
-            </div>
+                ) : previewItem.mimeType === 'application/pdf' || previewItem.name.toLowerCase().endsWith('.pdf') ? (
+                  <div ref={pdfContainerRef} className="h-full w-full" />
+                ) : previewItem.category === 'videos' ? (
+                  <video controls autoPlay
+                    src={addVolParam(`/api/agent/preview?path=${encodeURIComponent(previewItem.relativePath)}`)}
+                    className="max-h-[65vh] max-w-full rounded-xl shadow-md"
+                  />
+                ) : previewItem.category === 'audio' ? (
+                  <div className="flex flex-col items-center gap-4 rounded-2xl bg-white p-8 shadow-md">
+                    <Music size={48} className="text-indigo-600" />
+                    <p className="font-semibold text-slate-700">{previewItem.name}</p>
+                    <audio controls autoPlay
+                      src={addVolParam(`/api/agent/preview?path=${encodeURIComponent(previewItem.relativePath)}`)}
+                      className="w-80"
+                    />
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center gap-4 rounded-2xl bg-white p-10 text-center shadow-md">
+                    {getItemIcon(previewItem)}
+                    <div>
+                      <h4 className="font-semibold text-slate-800">{previewItem.name}</h4>
+                      <p className="mt-1 text-xs text-slate-500">Preview not available for this format.</p>
+                    </div>
+                    <a
+                      href={addVolParam(`/api/agent/download?path=${encodeURIComponent(previewItem.relativePath)}`)}
+                      download={previewItem.name}
+                      className="flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700"
+                    >
+                      <Download size={16} /> Download File
+                    </a>
+                  </div>
+                )}
+              </div>
           </div>
         </div>
       )}
