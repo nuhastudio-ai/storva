@@ -122,24 +122,47 @@ function FilesContent() {
   // ── Volumes ────────────────────────────────────────────────────────────────
   const [volumes, setVolumes] = useState<Volume[]>([])
   const [activeVol, setActiveVol] = useState<Volume | null>(null)
+  const [volLoadError, setVolLoadError] = useState(false)
 
   useEffect(() => {
-    fetch('/api/agent/volumes')
-      .then((r) => r.ok ? r.json() : null)
-      .then((data) => {
-        if (!data?.volumes) return
-        const accessible: Volume[] = data.volumes.filter((v: Volume) => v.accessible)
-        setVolumes(accessible)
+    let cancelled = false
+    let retryTimer: NodeJS.Timeout | null = null
 
-        // Restore from URL param, else pick first accessible
+    async function fetchVolumes(attempt = 1) {
+      if (cancelled) return
+      try {
+        const r = await fetch('/api/agent/volumes', { signal: AbortSignal.timeout(7_000) })
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        const data = await r.json()
+        if (cancelled) return
+
+        const accessible: Volume[] = (data.volumes ?? []).filter((v: Volume) => v.accessible)
+        setVolumes(accessible)
+        setVolLoadError(false)
+
+        // Restore from URL param, else keep current, else first accessible
         if (volParam) {
           const found = accessible.find((v) => String(v.id) === volParam)
           setActiveVol(found ?? accessible[0] ?? null)
         } else {
           setActiveVol((prev) => prev ?? accessible[0] ?? null)
         }
-      })
-      .catch(() => {})
+      } catch {
+        if (cancelled) return
+        // Agent may still be starting — retry up to 5x with backoff (2s, 4s, 6s…)
+        if (attempt <= 5) {
+          setVolLoadError(true)
+          retryTimer = setTimeout(() => fetchVolumes(attempt + 1), attempt * 2000)
+        }
+        // Don't wipe existing volumes/activeVol on failure so page stays usable
+      }
+    }
+
+    fetchVolumes()
+    return () => {
+      cancelled = true
+      if (retryTimer) clearTimeout(retryTimer)
+    }
   }, []) // only on mount
 
   const handleVolumeChange = (vol: Volume) => {
