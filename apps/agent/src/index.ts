@@ -175,6 +175,15 @@ app.get('/health', async (_req, res) => {
     timestamp: Date.now(), version: AGENT_VERSION,
     disk: primary?.disk ?? null,
     volumes,
+    // Reconciler runs in a separate child process now (see reconciler-process.ts)
+    // so a heavy initial scan can never delay this response. This just reports
+    // whether that process is currently up and which paths it's watching —
+    // it's informational only and never affects `status` above.
+    reconciler: {
+      running: reconcilerReady,
+      pid: reconcilerProc?.pid ?? null,
+      watchedPaths: reconcilerWatchedPaths,
+    },
   })
 })
 
@@ -603,22 +612,85 @@ app.get('/thumbnail', authenticateToken('read'), async (req, res) => {
   } catch (err: any) { res.status(500).json({ error: err.message }) }
 })
 
-// ── Reconciliation ────────────────────────────────────────────────────────────
-import { setupReconciliation } from './reconcile'
-const stopFns: Array<() => void> = []
-process.on('SIGINT', () => { stopFns.forEach((fn) => fn()); process.exit() })
+// ── Reconciliation (runs in its own process — see reconciler-process.ts) ──────
+import { fork, ChildProcess } from 'node:child_process'
+
+let reconcilerProc: ChildProcess | null = null
+let reconcilerReady = false
+let reconcilerWatchedPaths: string[] = []
+let reconcilerRestarts = 0
+const MAX_RECONCILER_RESTARTS = 10
+
+function reconcilerScriptPath(): string {
+  // Dev (tsx watch src/index.ts) runs straight from .ts — fork the .ts
+  // sibling so it goes through the same loader. Prod runs from dist/*.js
+  // after `tsc` — fork the compiled .js sibling instead.
+  const isTs = __filename.endsWith('.ts')
+  return path.join(__dirname, isTs ? 'reconciler-process.ts' : 'reconciler-process.js')
+}
+
+function startReconcilerProcess(volumePaths: string[]) {
+  if (volumePaths.length === 0) {
+    console.warn('[Storva Agent] No accessible volumes — reconciler process not started')
+    return
+  }
+
+  reconcilerReady = false
+  reconcilerProc = fork(reconcilerScriptPath(), [], {
+    env: { ...process.env, STORVA_RECONCILE_PATHS: volumePaths.join(',') },
+    stdio: 'inherit',
+  })
+
+  reconcilerProc.on('message', (msg: any) => {
+    if (msg?.type === 'ready') {
+      reconcilerReady = true
+      reconcilerWatchedPaths = msg.paths ?? volumePaths
+      reconcilerRestarts = 0 // a clean ready resets the crash-loop counter
+      console.log(`[Storva Agent] Reconciler process ready (pid ${reconcilerProc?.pid})`)
+    }
+  })
+
+  reconcilerProc.on('exit', (code, signal) => {
+    reconcilerReady = false
+    const wasIntentional = shuttingDown
+    reconcilerProc = null
+    if (wasIntentional) return
+
+    console.error(`[Storva Agent] Reconciler process exited (code=${code}, signal=${signal})`)
+    if (reconcilerRestarts >= MAX_RECONCILER_RESTARTS) {
+      console.error('[Storva Agent] Reconciler process crash-looping — giving up on auto-restart. File sync will be stale until the agent is restarted.')
+      return
+    }
+    reconcilerRestarts++
+    const delay = Math.min(1000 * 2 ** reconcilerRestarts, 30_000)
+    console.log(`[Storva Agent] Restarting reconciler process in ${delay}ms (attempt ${reconcilerRestarts}/${MAX_RECONCILER_RESTARTS})...`)
+    setTimeout(() => startReconcilerProcess(volumePaths), delay)
+  })
+}
+
+let shuttingDown = false
+function shutdown() {
+  shuttingDown = true
+  if (reconcilerProc) reconcilerProc.kill('SIGTERM')
+  process.exit()
+}
+process.on('SIGINT', shutdown)
+process.on('SIGTERM', shutdown)
 
 // ── Startup ───────────────────────────────────────────────────────────────────
 async function start() {
   await initVolumes()
 
+  const accessiblePaths: string[] = []
   for (const vol of storageVolumes.listActive()) {
     if (volumeErrors.get(vol.id) === null) {
-      stopFns.push(setupReconciliation(vol.storage_path))
+      accessiblePaths.push(vol.storage_path)
     } else {
       console.warn(`[Storva Agent] Skipping watcher for volume #${vol.id} "${vol.label}" — not accessible`)
     }
   }
+
+  startReconcilerProcess(accessiblePaths)
 
   app.listen(PORT, () => {
     const active = storageVolumes.listActive()

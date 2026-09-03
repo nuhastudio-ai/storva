@@ -13,6 +13,16 @@ mkdirSync(path.dirname(DB_PATH), { recursive: true })
 
 export const db = new Database(DB_PATH, { fileMustExist: false })
 
+// WAL mode is required once we have more than one process opening this same
+// file — the main agent process (HTTP server, uploads) and the standalone
+// reconciler process (chokidar watcher, sync-queue writer) each hold their
+// own connection. WAL allows concurrent readers + a single writer across
+// processes safely instead of the default rollback-journal mode, which can
+// throw SQLITE_BUSY under concurrent multi-process access.
+db.pragma('journal_mode = WAL')
+
+export { DB_PATH }
+
 db.exec(`
   CREATE TABLE IF NOT EXISTS sync_queue (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

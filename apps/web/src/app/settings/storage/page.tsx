@@ -55,6 +55,11 @@ export default function StorageSettingsPage() {
 
   const fetchVolumes = async (attempt = 1) => {
     if (attempt === 1) setLoading(true)
+    // Give the agent much more room on the first load — a fresh chokidar
+    // scan of a large/whole-drive storage root can keep the agent's event
+    // loop busy for a while, making /health briefly slow to respond. We'd
+    // rather keep polling patiently than flash a false "offline" banner.
+    const MAX_ATTEMPTS = 15
     try {
       // /api/connection/health hits agent /health directly — no auth needed, fast
       const healthRes = await fetch('/api/connection/health', { signal: AbortSignal.timeout(6_000) })
@@ -63,9 +68,10 @@ export default function StorageSettingsPage() {
       setAgentOnline(online)
 
       if (!online) {
-        // Agent not reachable yet — retry up to 5x (agent may still be booting)
-        if (attempt <= 5) {
-          setTimeout(() => fetchVolumes(attempt + 1), attempt * 2000)
+        // Agent not reachable yet — retry (agent may still be booting or
+        // doing its initial full-volume file scan).
+        if (attempt <= MAX_ATTEMPTS) {
+          setTimeout(() => fetchVolumes(attempt + 1), Math.min(attempt * 2000, 10_000))
         } else {
           setVolumes([])
           setLoading(false)
@@ -90,14 +96,14 @@ export default function StorageSettingsPage() {
       }))
       setVolumes(merged)
     } catch (err: any) {
-      if (attempt <= 5) {
-        setTimeout(() => fetchVolumes(attempt + 1), attempt * 2000)
+      if (attempt <= MAX_ATTEMPTS) {
+        setTimeout(() => fetchVolumes(attempt + 1), Math.min(attempt * 2000, 10_000))
         return
       }
       setAgentOnline(false)
       setVolumes([])
     } finally {
-      if (attempt === 1 || attempt > 5) setLoading(false)
+      if (attempt === 1 || attempt > MAX_ATTEMPTS) setLoading(false)
     }
   }
 
@@ -183,9 +189,8 @@ export default function StorageSettingsPage() {
     <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_#eef2ff,_transparent_34%),linear-gradient(180deg,#f8fafc_0%,#eef2ff_100%)] p-3 text-slate-700 md:p-6">
       {/* Toast */}
       {toast && (
-        <div className={`fixed top-6 right-6 z-50 flex items-center gap-3 rounded-2xl px-5 py-3 shadow-xl backdrop-blur-md ${
-          toast.type === 'success' ? 'bg-emerald-600/90 text-white' : 'bg-rose-600/90 text-white'
-        }`}>
+        <div className={`fixed top-6 right-6 z-50 flex items-center gap-3 rounded-2xl px-5 py-3 shadow-xl backdrop-blur-md ${toast.type === 'success' ? 'bg-emerald-600/90 text-white' : 'bg-rose-600/90 text-white'
+          }`}>
           {toast.type === 'success' ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
           <span className="text-sm font-medium">{toast.msg}</span>
         </div>
@@ -245,22 +250,20 @@ export default function StorageSettingsPage() {
                 return (
                   <div
                     key={vol.id}
-                    className={`relative flex flex-col rounded-[1.5rem] bg-white p-5 shadow-sm ring-1 transition ${
-                      vol.enabled && vol.accessible
+                    className={`relative flex flex-col rounded-[1.5rem] bg-white p-5 shadow-sm ring-1 transition ${vol.enabled && vol.accessible
                         ? 'ring-slate-200/70'
                         : vol.enabled && !vol.accessible
-                        ? 'ring-rose-200'
-                        : 'ring-slate-100 opacity-60'
-                    }`}
+                          ? 'ring-rose-200'
+                          : 'ring-slate-100 opacity-60'
+                      }`}
                   >
                     {/* Card header */}
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
-                          vol.accessible ? 'bg-emerald-50 text-emerald-600'
-                          : vol.enabled ? 'bg-rose-50 text-rose-600'
-                          : 'bg-slate-100 text-slate-400'
-                        }`}>
+                        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${vol.accessible ? 'bg-emerald-50 text-emerald-600'
+                            : vol.enabled ? 'bg-rose-50 text-rose-600'
+                              : 'bg-slate-100 text-slate-400'
+                          }`}>
                           <HardDrive size={20} />
                         </div>
 
@@ -299,11 +302,10 @@ export default function StorageSettingsPage() {
                       </div>
 
                       {/* Status badge */}
-                      <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                        vol.accessible ? 'bg-emerald-100 text-emerald-700'
-                        : vol.enabled ? 'bg-rose-100 text-rose-700'
-                        : 'bg-slate-100 text-slate-500'
-                      }`}>
+                      <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ${vol.accessible ? 'bg-emerald-100 text-emerald-700'
+                          : vol.enabled ? 'bg-rose-100 text-rose-700'
+                            : 'bg-slate-100 text-slate-500'
+                        }`}>
                         {vol.accessible ? 'Active' : vol.enabled ? 'Error' : 'Disabled'}
                       </span>
                     </div>
@@ -325,9 +327,8 @@ export default function StorageSettingsPage() {
                         </div>
                         <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
                           <div
-                            className={`h-full rounded-full transition-all duration-500 ${
-                              usedPct > 90 ? 'bg-rose-500' : usedPct > 75 ? 'bg-amber-500' : 'bg-indigo-500'
-                            }`}
+                            className={`h-full rounded-full transition-all duration-500 ${usedPct > 90 ? 'bg-rose-500' : usedPct > 75 ? 'bg-amber-500' : 'bg-indigo-500'
+                              }`}
                             style={{ width: `${usedPct}%` }}
                           />
                         </div>
@@ -341,11 +342,10 @@ export default function StorageSettingsPage() {
                     <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-4">
                       <button
                         onClick={() => handleToggle(vol)}
-                        className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-                          vol.enabled
+                        className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${vol.enabled
                             ? 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                             : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'
-                        }`}
+                          }`}
                       >
                         {vol.enabled ? <><PowerOff size={13} /> Disable</> : <><Power size={13} /> Enable</>}
                       </button>

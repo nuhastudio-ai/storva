@@ -26,10 +26,17 @@ export function setupReconciliation(storageRoot: string) {
     // Keep false so chokidar builds its internal file tree (needed for accurate
     // 'change' and 'unlink' events later). We gate on watcherReady instead.
     ignoreInitial: false,
-    awaitWriteFinish: {
-      stabilityThreshold: 2000,
-      pollInterval: 100,
-    },
+    // NOTE: awaitWriteFinish intentionally omitted. It makes chokidar poll
+    // fs.stat every pollInterval for up to stabilityThreshold on EVERY file,
+    // including every file hit during the initial recursive scan — even
+    // though queueEvent() below discards all pre-ready events anyway. On a
+    // whole-drive storageRoot (e.g. D:\) with hundreds of thousands of
+    // existing files, that's pure wasted I/O that drags out the initial scan
+    // and starves the threadpool, making /health (and everything else) slow
+    // to respond right after agent startup. We already debounce real
+    // post-ready changes ourselves (500ms, see queueEvent), which serves the
+    // same "wait for the write to settle" purpose for actual live edits
+    // without penalizing the one-time startup scan.
   })
 
   // Debounce maps to prevent flooding the database/queue
