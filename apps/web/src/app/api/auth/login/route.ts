@@ -1,9 +1,10 @@
-import { repository } from '../../../../lib/repository'
-import { randomBytes } from 'node:crypto'
+import { createHmac, randomBytes } from 'node:crypto'
 
-function setSessionCookie(token: string) {
-  const maxAge = 60 * 60 * 24 * 30
-  return `session=${token}; Path=/; HttpOnly; SameSite=Lax; ${process.env.NODE_ENV === 'production' ? 'Secure; ' : ''} Max-Age=${maxAge}`
+const SECRET = process.env.SIGNING_PRIVATE_KEY || 'super-secret-signing-key-minimum-32-chars-long'
+
+function signToken(payload: string): string {
+  const sig = createHmac('sha256', SECRET).update(payload).digest('hex')
+  return `${payload}.${sig}`
 }
 
 export async function POST(req: Request) {
@@ -20,34 +21,18 @@ export async function POST(req: Request) {
       return new Response(JSON.stringify({ error: 'Invalid username or password' }), { status: 401 })
     }
 
-    // Find or create admin user in DB
-    let user = await repository.user.findFirst({ where: { role: 'ADMIN' } })
-    if (!user) {
-      // Create default admin user record if not present
-      user = await repository.user.create({
-        data: {
-          email: `${envUsername}@local.storva`,
-          name: 'Admin',
-          passwordHash: 'ENV_AUTH',
-          role: 'ADMIN',
-        },
-      })
-    }
+    // Create a signed token: "admin:<random>.<hmac>"
+    const nonce = randomBytes(16).toString('hex')
+    const payload = `${envUsername}:${nonce}`
+    const token = signToken(payload)
 
-    const token = randomBytes(32).toString('hex')
-    await repository.session.create({
-      data: {
-        userId: user.id,
-        tokenHash: token,
-        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-      },
-    })
+    const maxAge = 60 * 60 * 24 * 30 // 30 days
+    const cookie = `session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}`
 
-    const cookie = setSessionCookie(token)
-    return new Response(JSON.stringify({ success: true, user: { id: user.id, username: envUsername, role: 'ADMIN' } }), {
-      status: 200,
-      headers: { 'Set-Cookie': cookie, 'Content-Type': 'application/json' },
-    })
+    return new Response(
+      JSON.stringify({ success: true, user: { username: envUsername, role: 'ADMIN' } }),
+      { status: 200, headers: { 'Set-Cookie': cookie, 'Content-Type': 'application/json' } },
+    )
   } catch (err: any) {
     return new Response(JSON.stringify({ error: err.message }), { status: 500 })
   }
