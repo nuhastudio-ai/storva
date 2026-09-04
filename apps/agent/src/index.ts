@@ -190,7 +190,7 @@ app.get('/health', async (_req, res) => {
 // 1b. Version
 app.get('/version', (_req, res) => res.json(getAgentVersionInfo()))
 
-// 2. Storage stats — statfs only, no recursive walk, instant
+// 2. Storage stats — recursive walk for category aggregation
 app.get('/storage/stats', async (req, res) => {
   const { vol, error } = resolveVolume(req.query.vol as string | undefined)
   if (!vol) return res.status(400).json({ error })
@@ -200,11 +200,36 @@ app.get('/storage/stats', async (req, res) => {
     const freeBytes = fsStats ? fsStats.bsize * fsStats.bavail : 0
     const usedBytes = fsStats ? fsStats.bsize * (fsStats.blocks - fsStats.bavail) : 0
     const percentUsed = totalBytes > 0 ? Math.round((usedBytes / totalBytes) * 10000) / 100 : 0
+
+    const byCategory: Record<string, number> = {
+      images: 0, videos: 0, audio: 0, archives: 0, documents: 0, others: 0
+    }
+
+    const walk = async (dir: string) => {
+      const entries = await fsp.readdir(dir, { withFileTypes: true }).catch(() => [])
+      for (const e of entries) {
+        if (e.name === '.trash' || e.name === '.staging' || e.name === '.DS_Store' || WINDOWS_SYSTEM_DIRS.has(e.name)) continue
+        const full = path.join(dir, e.name)
+        if (e.isDirectory()) {
+          await walk(full)
+        } else {
+          const st = await fsp.stat(full).catch(() => null)
+          if (st) {
+            const cat = getCategory(getMimeType(e.name))
+            byCategory[cat] = (byCategory[cat] || 0) + st.size
+          }
+        }
+      }
+    }
+
+    // Fast walk (limit 5s)
+    await withTimeout(walk(vol.storage_path), 5000).catch(() => {})
+
     res.json({
       status: 'online',
       volumeId: vol.id, volumeLabel: vol.label, storagePath: vol.storage_path,
       totalBytes, freeBytes, usedBytes, percentUsed,
-      byCategory: {},
+      byCategory,
     })
   } catch (err: any) { res.status(500).json({ error: err.message }) }
 })
