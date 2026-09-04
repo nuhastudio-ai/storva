@@ -63,10 +63,6 @@ async function proxy(req: NextRequest, params: { path: string[] }) {
     }
 
     // ── Per-request timeout — prevents the proxy hanging forever ─────────────
-    // UND_ERR_HEADERS_TIMEOUT was caused by the agent being busy (chokidar
-    // initial scan) while the proxy waited indefinitely. Now we abort after
-    // SHORT_TIMEOUT_MS (8 s) for normal requests so the UI gets a fast 502
-    // instead of a frozen spinner, and the user can retry once the agent is ready.
     const timeoutMs = getTimeout(params.path)
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), timeoutMs)
@@ -81,6 +77,46 @@ async function proxy(req: NextRequest, params: { path: string[] }) {
       })
     } finally {
       clearTimeout(timer)
+    }
+
+    // ── Record activity on successful mutations ──────────────────────────────
+    const mutableActions: Record<string, string> = {
+      folder: 'folder:create',
+      rename: 'file:rename',
+      delete: 'file:delete',
+      upload: 'file:upload',
+    }
+    const actionKey = params.path[0] ?? ''
+    const action = mutableActions[actionKey]
+    if (action && res.ok && req.method !== 'GET' && req.method !== 'HEAD') {
+      // best‑effort logging, never block response
+      try {
+        let meta: any = {}
+        if (bodyData && typeof bodyData !== 'string' && (bodyData as Buffer).length) {
+          try { meta = JSON.parse((bodyData as Buffer).toString()) } catch { /* ignore */ }
+        }
+        await repository.activity.create({
+          data: {
+            userId,
+            action,
+            metadata: JSON.stringify({ path: params.path, ...meta }),
+          },
+        })
+      } catch { /* swallow */ }
+    }
+
+    // ── Record file download ─────────────────────────────────────────────────
+    if (actionKey === 'download' && res.ok && req.method === 'GET') {
+      try {
+        const filePath = req.nextUrl.searchParams.get('path') ?? ''
+        await repository.activity.create({
+          data: {
+            userId,
+            action: 'file:download',
+            metadata: JSON.stringify({ filePath, path: params.path }),
+          },
+        })
+      } catch { /* swallow */ }
     }
 
     const response = new NextResponse(res.body, {
@@ -99,7 +135,6 @@ async function proxy(req: NextRequest, params: { path: string[] }) {
 
     return response
   } catch (err: any) {
-    // AbortError = our timeout fired — tell client agent is slow/busy
     if (err?.name === 'AbortError') {
       console.warn(`Agent proxy timeout: ${req.method} ${req.nextUrl.pathname}`)
       return NextResponse.json({ error: 'Agent timeout — it may still be starting up' }, { status: 504 })

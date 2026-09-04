@@ -2,6 +2,31 @@ import { repository } from '@/lib/repository'
 import { randomBytes } from 'node:crypto'
 import { NextRequest, NextResponse } from 'next/server'
 
+async function getUserId(req: NextRequest): Promise<string> {
+  const token = req.cookies.get('session')?.value
+  if (!token) return 'dev-user'
+  const session = await repository.session.findFirst({
+    where: { tokenHash: token, expiresAt: { gte: new Date() } },
+  })
+  return session?.userId ?? 'dev-user'
+}
+
+async function recordActivity(userId: string, fileId: string) {
+  try {
+    await repository.activity.create({
+      data: {
+        userId,
+        action: 'share:create',
+        fileId,
+        metadata: JSON.stringify({ fileId }),
+      },
+    })
+  } catch {
+    // best-effort only
+  }
+}
+
+
 export async function POST(req: NextRequest) {
   try {
     const { fileId, expiresAt, password, readOnly } = await req.json()
@@ -19,6 +44,9 @@ export async function POST(req: NextRequest) {
         readOnly: readOnly ?? true,
       },
     })
+
+    const userId = await getUserId(req)
+    void recordActivity(userId, fileId)
 
     return NextResponse.json({
       success: true,
