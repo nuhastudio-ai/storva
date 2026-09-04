@@ -103,6 +103,23 @@ export default function ActivitySettingsPage() {
                   const fileName = act.file?.name ?? (typeof path === 'string' ? path.split(/[/\\]/).pop() ?? '' : '')
                   const { label, color, icon: Icon } = actionLabel(act.action)
 
+                  // Enrich description
+                  let description = fileName
+                  if (act.action === 'file:rename') {
+                    description = `"${meta.oldName}" → "${meta.newName}" in "${meta.dirPath || '/'}"`
+                  } else if (act.action === 'file:delete') {
+                    description = `"${meta.fileName}" in "${meta.dirPath || '/'}"`
+                  } else if (act.action === 'folder:create') {
+                    description = `"${meta.folderName}" in "${meta.dirPath || '/'}"`
+                  } else if (act.action === 'file:upload') {
+                    const files = meta.fileNames?.join(', ') || 'file'
+                    description = `${files} to "${meta.dirPath || '/'}"`
+                  } else if (act.action === 'file:download') {
+                    description = `"${fileName}" from "${meta.dirPath || '/'}"`
+                  } else if (act.action === 'share:create') {
+                    description = `"${meta.fileName}"`
+                  }
+
                   return (
                     <li key={act.id} className="flex items-center gap-3 px-6 py-4 transition hover:bg-slate-50/60">
                       <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${color}`}>
@@ -110,7 +127,7 @@ export default function ActivitySettingsPage() {
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium text-slate-700">{label}</p>
-                        {fileName && <p className="mt-0.5 truncate text-xs text-slate-400">{fileName}</p>}
+                        <p className="mt-0.5 truncate text-xs text-slate-400">{description}</p>
                       </div>
                       <span className="whitespace-nowrap text-xs text-slate-400">{formatTime(act.createdAt)}</span>
                     </li>
