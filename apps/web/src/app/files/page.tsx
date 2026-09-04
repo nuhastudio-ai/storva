@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, Suspense, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Sidebar, RightPanel } from '@/components/dashboard'
+import { useAuth } from '@/lib/auth'
 import PhotoSwipeLightbox from 'photoswipe/lightbox'
 import 'photoswipe/style.css'
 import PdfViewer from '@/components/PdfViewer'
@@ -116,6 +117,7 @@ function VolumeSwitcher({
 function FilesContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { user } = useAuth()
 
   const currentPath = searchParams.get('path') || ''
   const categoryFilter = searchParams.get('category') || ''
@@ -448,23 +450,26 @@ function FilesContent() {
                 className="hidden"
                 onChange={(e) => handleFileUpload(e.target.files)}
               />
-              <button
-                onClick={() => document.getElementById('file-upload-input')?.click()}
-                disabled={isUploading || !activeVol}
-                className="flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-indigo-500/25 hover:bg-indigo-700 disabled:opacity-50"
-              >
-                <Upload size={16} />
-                {isUploading ? 'Uploading...' : 'Upload'}
-              </button>
-
-              <button
-                onClick={() => setIsNewFolderOpen(true)}
-                disabled={!activeVol}
-                className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50"
-              >
-                <FolderPlus size={16} className="text-indigo-600" />
-                New Folder
-              </button>
+              {user && (
+                <>
+                  <button
+                    onClick={() => document.getElementById('file-upload-input')?.click()}
+                    disabled={isUploading || !activeVol}
+                    className="flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-indigo-500/25 hover:bg-indigo-700 disabled:opacity-50"
+                  >
+                    <Upload size={16} />
+                    {isUploading ? 'Uploading...' : 'Upload'}
+                  </button>
+                  <button
+                    onClick={() => setIsNewFolderOpen(true)}
+                    disabled={!activeVol}
+                    className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    <FolderPlus size={16} className="text-indigo-600" />
+                    New Folder
+                  </button>
+                </>
+              )}
 
               <button
                 onClick={loadFiles}

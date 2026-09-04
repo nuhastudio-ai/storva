@@ -1,7 +1,5 @@
 import { repository } from '../../../../lib/repository'
-import argon2 from 'argon2'
 import { randomBytes } from 'node:crypto'
-
 
 function setSessionCookie(token: string) {
   const maxAge = 60 * 60 * 24 * 30
@@ -10,17 +8,43 @@ function setSessionCookie(token: string) {
 
 export async function POST(req: Request) {
   try {
-    const { email, password } = await req.json()
-    if (!email || !password) return new Response(JSON.stringify({ error: 'Missing fields' }), { status: 400 })
-    const user = await repository.user.findUnique({ where: { email } })
-    if (!user) return new Response(JSON.stringify({ error: 'Invalid credentials' }), { status: 401 })
-    const match = await argon2.verify(user.passwordHash, password)
-    if (!match) return new Response(JSON.stringify({ error: 'Invalid credentials' }), { status: 401 })
+    const { username, password } = await req.json()
+    if (!username || !password) {
+      return new Response(JSON.stringify({ error: 'Missing username or password' }), { status: 400 })
+    }
+
+    const envUsername = process.env.ADMIN_USERNAME || 'admin'
+    const envPassword = process.env.ADMIN_PASSWORD || 'password'
+
+    if (username !== envUsername || password !== envPassword) {
+      return new Response(JSON.stringify({ error: 'Invalid username or password' }), { status: 401 })
+    }
+
+    // Find or create admin user in DB
+    let user = await repository.user.findFirst({ where: { role: 'ADMIN' } })
+    if (!user) {
+      // Create default admin user record if not present
+      user = await repository.user.create({
+        data: {
+          email: `${envUsername}@local.storva`,
+          name: 'Admin',
+          passwordHash: 'ENV_AUTH',
+          role: 'ADMIN',
+        },
+      })
+    }
 
     const token = randomBytes(32).toString('hex')
-    await repository.session.create({ data: { userId: user.id, tokenHash: token, expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) } })
+    await repository.session.create({
+      data: {
+        userId: user.id,
+        tokenHash: token,
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      },
+    })
+
     const cookie = setSessionCookie(token)
-    return new Response(JSON.stringify({ success: true, userId: user.id }), {
+    return new Response(JSON.stringify({ success: true, user: { id: user.id, username: envUsername, role: 'ADMIN' } }), {
       status: 200,
       headers: { 'Set-Cookie': cookie, 'Content-Type': 'application/json' },
     })
