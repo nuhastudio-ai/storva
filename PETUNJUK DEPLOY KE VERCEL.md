@@ -3,6 +3,33 @@ PETUNJUK DEPLOY KE VERCEL
 
 App: Next.js 15, Prisma, Turborepo, Tailwind v4.
 
+Rekomendasi: Neon untuk Storva karena beberapa alasan spesifik dari schema-nya:
+
+Kenapa Neon paling cocok:
+
+Schema Storva punya self-referential relation di FileMetadata (parent-children folder hierarchy) — ini butuh PostgreSQL penuh, bukan MySQL, dan Neon jalan di PostgreSQL 16 tanpa batasan fitur
+Connection pooling bawaan penting karena Next.js serverless di dev mode bisa spawn banyak connection sekaligus — Neon handle ini otomatis tanpa konfigurasi pgBouncer extra seperti Supabase
+Free tier-nya tidak suspend/pause project seperti Supabase (yang pause setelah 1 minggu tidak aktif) — database kamu tetap bisa diakses kapanpun
+
+Cara setup Neon untuk Storva (< 2 menit):
+
+Daftar di neon.tech → buat project baru
+Copy connection string dari dashboard, formatnya:
+postgresql://user:password@ep-xxx.region.aws.neon.tech/neondb?sslmode=require
+Paste ke apps/web/.env:
+env
+DATABASE_URL="postgresql://user:password@ep-xxx.region.aws.neon.tech/neondb?sslmode=require"
+Jalankan migration:
+bash
+cd apps/web
+pnpm prisma migrate deploy
+
+Selesai — tidak perlu install PostgreSQL lokal sama sekali.
+
+Catatan untuk Supabase: Kalau kamu tetap pilih Supabase, pastikan pakai connection pooler (port 6543, bukan 5432) di DATABASE_URL karena Prisma dengan Next.js serverless butuh pooling. Formatnya:
+
+postgresql://postgres:[password]@db.xxx.supabase.co:6543/postgres?pgbouncer=true
+
 1. Siapkan Database Production
 
 - Butuh PostgreSQL/MySQL yang bisa diakses public
@@ -70,30 +97,3 @@ Klik "Deploy".
 Build akan berjalan otomatis. Setelah selesai, app langsung live di domain Vercel.
 
 ---
-
-Rekomendasi: Neon untuk Storva karena beberapa alasan spesifik dari schema-nya:
-
-Kenapa Neon paling cocok:
-
-Schema Storva punya self-referential relation di FileMetadata (parent-children folder hierarchy) — ini butuh PostgreSQL penuh, bukan MySQL, dan Neon jalan di PostgreSQL 16 tanpa batasan fitur
-Connection pooling bawaan penting karena Next.js serverless di dev mode bisa spawn banyak connection sekaligus — Neon handle ini otomatis tanpa konfigurasi pgBouncer extra seperti Supabase
-Free tier-nya tidak suspend/pause project seperti Supabase (yang pause setelah 1 minggu tidak aktif) — database kamu tetap bisa diakses kapanpun
-
-Cara setup Neon untuk Storva (< 2 menit):
-
-Daftar di neon.tech → buat project baru
-Copy connection string dari dashboard, formatnya:
-postgresql://user:password@ep-xxx.region.aws.neon.tech/neondb?sslmode=require
-Paste ke apps/web/.env:
-env
-DATABASE_URL="postgresql://user:password@ep-xxx.region.aws.neon.tech/neondb?sslmode=require"
-Jalankan migration:
-bash
-cd apps/web
-pnpm prisma migrate deploy
-
-Selesai — tidak perlu install PostgreSQL lokal sama sekali.
-
-Catatan untuk Supabase: Kalau kamu tetap pilih Supabase, pastikan pakai connection pooler (port 6543, bukan 5432) di DATABASE_URL karena Prisma dengan Next.js serverless butuh pooling. Formatnya:
-
-postgresql://postgres:[password]@db.xxx.supabase.co:6543/postgres?pgbouncer=true
