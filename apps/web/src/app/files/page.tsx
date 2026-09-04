@@ -601,18 +601,22 @@ function FilesContent() {
                             <Download size={14} />
                           </a>
                         )}
-                        <button
-                          onClick={() => { setRenamingItem(item); setNewName(item.name) }}
-                          className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-indigo-600"
-                        >
-                          <Edit2 size={14} />
-                        </button>
-                        <button
-                          onClick={() => setDeletingItem(item)}
-                          className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                        {user && (
+                          <button
+                            onClick={() => { setRenamingItem(item); setNewName(item.name) }}
+                            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-indigo-600"
+                          >
+                            <Edit2 size={14} />
+                          </button>
+                        )}
+                        {user && (
+                          <button
+                            onClick={() => setDeletingItem(item)}
+                            className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
                       </div>
                     </div>
                     <div
@@ -670,8 +674,12 @@ function FilesContent() {
                                 </a>
                               </>
                             )}
-                            <button onClick={() => { setRenamingItem(item); setNewName(item.name) }} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-indigo-600"><Edit2 size={15} /></button>
-                            <button onClick={() => setDeletingItem(item)} className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600"><Trash2 size={15} /></button>
+                            {user && (
+                              <button onClick={() => { setRenamingItem(item); setNewName(item.name) }} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-indigo-600"><Edit2 size={15} /></button>
+                            )}
+                            {user && (
+                              <button onClick={() => setDeletingItem(item)} className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600"><Trash2 size={15} /></button>
+                            )}
                           </div>
                         </td>
                       </tr>
