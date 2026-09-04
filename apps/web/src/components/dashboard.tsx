@@ -195,7 +195,7 @@ export function StorageCards() {
 
   const byCat = stats?.byCategory || {}
   // Total used by files on disk — each card shows category/fileTotal
-  const fileTotal = Object.values(byCat).reduce((a: number, b: number) => a + (b || 0), 0) || 1
+  const fileTotal = Object.values(byCat as Record<string, number>).reduce((a, b) => a + (b || 0), 0) || 1
 
   const cards = [
     {

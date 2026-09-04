@@ -1,5 +1,4 @@
 import { NextResponse, NextRequest } from 'next/server'
-import { repository } from './lib/repository'
 
 const RATE_LIMIT_WINDOW_MS = 60 * 1000
 const RATE_LIMIT_MAX = 10
@@ -21,7 +20,10 @@ function rateLimit(key: string): boolean {
 
 const SENSITIVE_PATHS = ['/api/auth/login', '/api/auth/register', '/api/pairing']
 
-export async function middleware(req: NextRequest) {
+// Paths excluded from auth check (login itself must be accessible without session)
+const AUTH_EXEMPT_PATHS = ['/api/auth/login', '/api/auth/logout', '/api/auth/me']
+
+export function middleware(req: NextRequest) {
   // Rate limiting on sensitive endpoints
   if (SENSITIVE_PATHS.some((p) => req.nextUrl.pathname.startsWith(p))) {
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0] ?? req.headers.get('x-real-ip') ?? 'unknown'
@@ -31,21 +33,19 @@ export async function middleware(req: NextRequest) {
     }
   }
 
-  // Auth middleware for write operations on all API routes
+  // Auth guard: block write operations (POST/PUT/DELETE/PATCH) without session cookie
   if (req.nextUrl.pathname.startsWith('/api/')) {
+    const isExempt = AUTH_EXEMPT_PATHS.some((p) => req.nextUrl.pathname.startsWith(p))
     const isWriteMethod = !['GET', 'HEAD', 'OPTIONS'].includes(req.method)
-    if (isWriteMethod) {
-      const token = req.headers.get('cookie')?.match(/(?:^|;\\s*)session=([^;]+)/)?.[1] ?? null
-      if (!token) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    if (isWriteMethod && !isExempt) {
+      const cookieHeader = req.headers.get('cookie') || ''
+      const hasSession = /(?:^|;\s*)session=[^;]+/.test(cookieHeader)
+      if (!hasSession) {
+        return NextResponse.json({ error: 'Unauthorized. Please sign in.' }, { status: 401 })
       }
-      const session = await repository.session.findFirst({
-        where: { tokenHash: token, expiresAt: { gte: new Date() } },
-      })
-      if (!session) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-      }
-      // Session is valid, allow the request
+      // ponytail: cookie presence check only; full token validation happens in API route handlers.
+      // Upgrade to JWT verification here when scaling to multi-instance.
     }
   }
 
