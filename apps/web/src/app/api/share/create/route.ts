@@ -13,12 +13,14 @@ async function getUserId(req: NextRequest): Promise<string> {
 
 async function recordActivity(userId: string, fileId: string) {
   try {
+    const file = await repository.fileMetadata.findUnique({ where: { id: fileId } })
+    const fileName = file?.name || 'unknown'
     await repository.activity.create({
       data: {
         userId,
         action: 'share:create',
         fileId,
-        metadata: JSON.stringify({ fileId }),
+        metadata: JSON.stringify({ fileId, fileName }),
       },
     })
   } catch {

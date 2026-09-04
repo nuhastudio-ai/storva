@@ -91,15 +91,49 @@ async function proxy(req: NextRequest, params: { path: string[] }) {
     if (action && res.ok && req.method !== 'GET' && req.method !== 'HEAD') {
       // best‑effort logging, never block response
       try {
+        // Parse incoming payload (JSON or multipart) for richer metadata
         let meta: any = {}
+        let extra: any = {}
         if (bodyData && typeof bodyData !== 'string' && (bodyData as Buffer).length) {
-          try { meta = JSON.parse((bodyData as Buffer).toString()) } catch { /* ignore */ }
+          const contentType = req.headers.get('content-type') || ''
+          if (contentType.includes('application/json')) {
+            try { meta = JSON.parse((bodyData as Buffer).toString()) } catch { /* ignore */ }
+          } else if (contentType.includes('multipart/form-data')) {
+            // Simple regex to extract filenames from multipart payload
+            const bodyStr = (bodyData as Buffer).toString('utf8')
+            const matches = [...bodyStr.matchAll(/filename="([^\"]+)"/g)]
+            const fileNames = matches.map(m => m[1])
+            const dirPath = req.nextUrl.searchParams.get('path') || '/' // destination directory
+            extra = { dirPath, fileNames }
+          }
+        }
+        // Enrich metadata per action type
+        if (actionKey === 'rename') {
+          const filePath: string = meta.filePath || ''
+          const dirPath = filePath.substring(0, filePath.lastIndexOf('/')) || '/'
+          const oldName = filePath.substring(filePath.lastIndexOf('/') + 1)
+          extra = { ...extra, dirPath, oldName, newName: meta.newName }
+        } else if (actionKey === 'delete') {
+          const filePath: string = meta.filePath || ''
+          const dirPath = filePath.substring(0, filePath.lastIndexOf('/')) || '/'
+          const fileName = filePath.substring(filePath.lastIndexOf('/') + 1)
+          extra = { ...extra, dirPath, fileName }
+        } else if (actionKey === 'folder') {
+          // folder creation payload already contains dirPath and folderName
+          extra = { ...extra, dirPath: meta.dirPath || '/', folderName: meta.folderName }
+        } else if (actionKey === 'upload') {
+          // dirPath already captured in extra from multipart handling above
+          // If JSON payload (unlikely), fallback to query param
+          if (!extra.dirPath) {
+            extra.dirPath = req.nextUrl.searchParams.get('path') || '/'
+          }
+          // fileNames already captured if multipart; if not, leave empty
         }
         await repository.activity.create({
           data: {
             userId,
             action,
-            metadata: JSON.stringify({ path: params.path, ...meta }),
+            metadata: JSON.stringify({ path: params.path, ...meta, ...extra }),
           },
         })
       } catch { /* swallow */ }
