@@ -193,16 +193,17 @@ export function StorageCards() {
       .catch(() => {})
   }, [])
 
-  const totalBytes = stats?.totalBytes || 1
   const byCat = stats?.byCategory || {}
+  // Total used by files on disk — each card shows category/fileTotal
+  const fileTotal = Object.values(byCat).reduce((a: number, b: number) => a + (b || 0), 0) || 1
 
   const cards = [
     {
       label: 'Documents',
       icon: FileText,
       value: formatBytes(byCat.documents || 0),
-      total: formatBytes(totalBytes),
-      pct: Math.min(100, Math.round(((byCat.documents || 0) / totalBytes) * 100)),
+      total: formatBytes(fileTotal),
+      pct: Math.min(100, Math.round(((byCat.documents || 0) / fileTotal) * 100)),
       color: 'from-blue-500 to-indigo-500',
       category: 'documents',
     },
@@ -210,8 +211,8 @@ export function StorageCards() {
       label: 'Images',
       icon: ImageIcon,
       value: formatBytes(byCat.images || 0),
-      total: formatBytes(totalBytes),
-      pct: Math.min(100, Math.round(((byCat.images || 0) / totalBytes) * 100)),
+      total: formatBytes(fileTotal),
+      pct: Math.min(100, Math.round(((byCat.images || 0) / fileTotal) * 100)),
       color: 'from-rose-500 to-pink-500',
       category: 'images',
     },
@@ -219,8 +220,8 @@ export function StorageCards() {
       label: 'Videos',
       icon: Video,
       value: formatBytes(byCat.videos || 0),
-      total: formatBytes(totalBytes),
-      pct: Math.min(100, Math.round(((byCat.videos || 0) / totalBytes) * 100)),
+      total: formatBytes(fileTotal),
+      pct: Math.min(100, Math.round(((byCat.videos || 0) / fileTotal) * 100)),
       color: 'from-amber-500 to-orange-500',
       category: 'videos',
     },
@@ -228,10 +229,10 @@ export function StorageCards() {
       label: 'Others',
       icon: Archive,
       value: formatBytes((byCat.others || 0) + (byCat.audio || 0) + (byCat.archives || 0)),
-      total: formatBytes(totalBytes),
+      total: formatBytes(fileTotal),
       pct: Math.min(
         100,
-        Math.round((((byCat.others || 0) + (byCat.audio || 0) + (byCat.archives || 0)) / totalBytes) * 100)
+        Math.round((((byCat.others || 0) + (byCat.audio || 0) + (byCat.archives || 0)) / fileTotal) * 100)
       ),
       color: 'from-emerald-500 to-teal-500',
       category: 'archives',
