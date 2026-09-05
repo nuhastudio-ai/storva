@@ -90,42 +90,7 @@ export function Sidebar() {
         <div className="text-[11px] font-medium tracking-wide text-slate-400 uppercase">Your Personal Storage</div>
       </div>
 
-      {/* Auth Widget */}
-      <div className="mt-4">
-        {loading ? (
-          <div className="h-10 animate-pulse rounded-xl bg-slate-100" />
-        ) : user ? (
-          <div className="flex items-center justify-between rounded-xl bg-gradient-to-r from-indigo-50 to-violet-50 px-3.5 py-2.5 ring-1 ring-indigo-100/70">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-xs font-bold text-white shadow-sm">
-                {(user.username ?? 'A')[0].toUpperCase()}
-              </div>
-              <div className="min-w-0">
-                <div className="truncate text-xs font-semibold text-slate-800">{user.username ?? 'Admin'}</div>
-                <div className="flex items-center gap-1 text-[10px] text-emerald-600 font-medium">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  Signed in
-                </div>
-              </div>
-            </div>
-            <button
-              onClick={handleSignOut}
-              title="Sign Out"
-              className="ml-2 flex items-center justify-center rounded-lg p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-500"
-            >
-              <LogOut size={14} />
-            </button>
-          </div>
-        ) : (
-          <Link
-            href="/login"
-            className="group flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-500/25 transition-all duration-200 hover:from-indigo-500 hover:to-violet-500 hover:shadow-lg hover:shadow-indigo-500/30 hover:scale-[1.01] active:scale-[0.99]"
-          >
-            <LogIn size={15} className="transition-transform group-hover:-translate-x-0.5" />
-            Sign In
-          </Link>
-        )}
-      </div>
+      {/* Auth Widget removed */}
 
       <nav className="mt-6 flex flex-1 flex-col gap-1 text-[13px] font-medium">
         <div className="mb-2 text-[10px] font-semibold tracking-widest text-slate-300 uppercase">Home</div>
@@ -473,6 +438,43 @@ export function RightPanel() {
 
   return (
     <aside className="hidden rounded-[1.5rem] bg-white p-5 shadow-sm ring-1 ring-slate-200/70 md:flex md:flex-col">
+      {/* Auth Widget moved here */}
+      <div className="mb-4">
+        {loading ? (
+          <div className="h-10 animate-pulse rounded-xl bg-slate-100" />
+        ) : user ? (
+          <div className="flex items-center justify-between rounded-xl bg-gradient-to-r from-indigo-50 to-violet-50 px-3.5 py-2.5 ring-1 ring-indigo-100/70">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-xs font-bold text-white shadow-sm">
+                {(user.username ?? 'A')[0].toUpperCase()}
+              </div>
+              <div className="min-w-0">
+                <div className="truncate text-xs font-semibold text-slate-800">{user.username ?? 'Admin'}</div>
+                <div className="flex items-center gap-1 text-[10px] text-emerald-600 font-medium">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  Signed in
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={handleSignOut}
+              title="Sign Out"
+              className="ml-2 flex items-center justify-center rounded-lg p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-500"
+            >
+              <LogOut size={14} />
+            </button>
+          </div>
+        ) : (
+          <Link
+            href="/login"
+            className="group flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-500/25 transition-all duration-200 hover:from-indigo-500 hover:to-violet-500 hover:shadow-lg hover:shadow-indigo-500/30 hover:scale-[1.01] active:scale-[0.99]"
+          >
+            <LogIn size={15} className="transition-transform group-hover:-translate-x-0.5" />
+            Sign In
+          </Link>
+        )}
+      </div>
+
       <Link
         href="/files"
         className="flex items-center gap-2 rounded-xl bg-slate-100/80 px-4 py-3 text-sm text-slate-400 hover:text-slate-600 hover:bg-slate-200/70 transition"
