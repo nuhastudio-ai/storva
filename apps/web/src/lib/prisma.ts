@@ -63,8 +63,30 @@ class MockPrismaClient {
         if (where) {
           items = items.filter((i: any) => Object.entries(where).every(([k, v]) => i[k] === v))
         }
+        if (orderBy) {
+          const [key, direction] = Object.entries(orderBy)[0] as [string, string]
+          items.sort((a: any, b: any) => {
+            const av = new Date(a[key]).getTime()
+            const bv = new Date(b[key]).getTime()
+            return direction === 'asc' ? av - bv : bv - av
+          })
+        }
         if (skip) items = items.slice(skip)
         if (take) items = items.slice(0, take)
+        if (include) {
+          items = items.map((item: any) => {
+            const result = { ...item }
+            if (include.user && modelName === 'activities') {
+              const user = this.data.users.find((u: any) => u.id === item.userId)
+              result.user = user ? { username: user.username } : null
+            }
+            if (include.file && modelName === 'activities') {
+              const file = this.data.file_metadata.find((f: any) => f.id === item.fileId)
+              result.file = file ? { name: file.name, relativePath: file.relativePath, isFolder: file.isFolder } : null
+            }
+            return result
+          })
+        }
         return items
       },
       update: async ({ where, data }: any) => {
