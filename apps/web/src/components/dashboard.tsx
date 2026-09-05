@@ -90,9 +90,9 @@ export function TabSwitcher({ tabs, activeTab, onChange }: { tabs: string[], act
 export function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
-  const { user, loading } = useAuth()
+  const { user } = useAuth()
 
-  // Mobile section state
+  // Mobile section state — synced with parent if needed
   const [activeMobileSection, setActiveMobileSection] = useState('Dashboard')
 
   const handleSignOut = async () => {
@@ -104,44 +104,34 @@ export function Sidebar() {
   return (
     <>
       {/* Desktop Sidebar */}
-      <aside className="hidden md:flex flex-col rounded-[1.5rem] bg-white/90 p-5 shadow-sm ring-1 ring-slate-200/70">
-        {/* Logo ... */}
-        <div>
-          <Link href="/" className="text-2xl font-black tracking-tight text-indigo-600">
-            Storva
-          </Link>
-          <div className="text-[11px] font-medium tracking-wide text-slate-400 uppercase">Your Personal Storage</div>
+      <aside className="hidden md:flex flex-col border-r border-slate-200 bg-white p-5 h-full">
+        <div className="mb-8">
+          <Link href="/" className="text-2xl font-black tracking-tight text-indigo-600">Storva</Link>
+          <div className="text-[11px] font-medium tracking-wide text-slate-400 uppercase mt-1">Your Personal Storage</div>
         </div>
         
-        <nav className="mt-6 flex flex-1 flex-col gap-1 text-[13px] font-medium">
-          {/* ... nav items ... */}
+        <nav className="flex-1 space-y-1">
           <div className="mb-2 text-[10px] font-semibold tracking-widest text-slate-300 uppercase">Home</div>
-          {NAV_ITEMS.map((item) => {
-            const isActive = item.path === '/' ? pathname === '/' : pathname?.startsWith(item.path)
-            return (
-              <Link
-                key={item.label}
-                href={item.path}
-                className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-left transition-all duration-200 ${
-                  isActive
-                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/25'
-                    : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
-                }`}
-              >
-                <item.icon size={18} strokeWidth={isActive ? 2.2 : 1.8} />
-                {item.label}
-              </Link>
-            )
-          })}
-          
+          {NAV_ITEMS.map((item) => (
+            <Link
+              key={item.label}
+              href={item.path}
+              className={`flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition ${
+                pathname === item.path ? 'bg-indigo-50 text-indigo-700' : 'text-slate-500 hover:bg-slate-50'
+              }`}
+            >
+              <item.icon size={18} />
+              {item.label}
+            </Link>
+          ))}
           <div className="mb-2 mt-6 text-[10px] font-semibold tracking-widest text-slate-300 uppercase">Categories</div>
           {CATEGORIES.map((item) => (
             <Link
               key={item.label}
               href={`/files?category=${item.category}`}
-              className="flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-left text-slate-500 transition-all duration-200 hover:bg-slate-100 hover:text-slate-700"
+              className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-slate-500 hover:bg-slate-50 transition"
             >
-              <item.icon size={18} strokeWidth={1.8} />
+              <item.icon size={18} />
               {item.label}
             </Link>
           ))}
@@ -149,21 +139,20 @@ export function Sidebar() {
       </aside>
 
       {/* Mobile Bottom Nav */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 flex items-center justify-around bg-white/90 backdrop-blur-md border-t border-slate-200 p-2 pb-4 shadow-lg">
-        {['Dashboard', 'Files', 'Recent', 'Categories', 'Settings'].map((label) => (
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 flex items-center justify-around bg-white border-t border-slate-200 p-3 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
+        {NAV_ITEMS.map((item) => (
           <button
-            key={label}
-            onClick={() => setActiveMobileSection(label)}
-            className={`flex flex-col items-center gap-1 p-2 text-[10px] ${
-              activeMobileSection === label ? 'text-indigo-600' : 'text-slate-400'
+            key={item.label}
+            onClick={() => {
+              setActiveMobileSection(item.label)
+              router.push(item.path)
+            }}
+            className={`flex flex-col items-center gap-1 ${
+              pathname === item.path ? 'text-indigo-600' : 'text-slate-400'
             }`}
           >
-            {label === 'Dashboard' && <LayoutDashboard size={20} />}
-            {label === 'Files' && <FolderOpen size={20} />}
-            {label === 'Recent' && <Clock size={20} />}
-            {label === 'Categories' && <Archive size={20} />}
-            {label === 'Settings' && <Settings size={20} />}
-            {label}
+            <item.icon size={22} />
+            <span className="text-[10px] font-medium">{item.label}</span>
           </button>
         ))}
       </div>
