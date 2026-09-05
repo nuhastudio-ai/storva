@@ -92,9 +92,6 @@ export function Sidebar() {
   const router = useRouter()
   const { user } = useAuth()
 
-  // Mobile section state — synced with parent if needed
-  const [activeMobileSection, setActiveMobileSection] = useState('Dashboard')
-
   const handleSignOut = async () => {
     await fetch('/api/auth/logout', { method: 'POST' })
     router.refresh()
@@ -104,55 +101,56 @@ export function Sidebar() {
   return (
     <>
       {/* Desktop Sidebar */}
-      <aside className="hidden md:flex flex-col border-r border-slate-200 bg-white p-5 h-full">
-        <div className="mb-8">
-          <Link href="/" className="text-2xl font-black tracking-tight text-indigo-600">Storva</Link>
-          <div className="text-[11px] font-medium tracking-wide text-slate-400 uppercase mt-1">Your Personal Storage</div>
+      <aside className="hidden md:flex w-[240px] flex-col bg-indigo-600 p-6 h-full text-indigo-100">
+        <div className="mb-12 flex justify-center">
+          <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-indigo-600 font-black text-2xl shadow-lg">P</div>
         </div>
         
-        <nav className="flex-1 space-y-1">
-          <div className="mb-2 text-[10px] font-semibold tracking-widest text-slate-300 uppercase">Home</div>
-          {NAV_ITEMS.map((item) => (
+        <nav className="flex-1 space-y-4">
+          {[
+            { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
+            { label: 'Files', icon: FolderOpen, path: '/files' },
+            { label: 'Recent', icon: Clock, path: '/recent' },
+            { label: 'Trash', icon: Trash2, path: '/trash' },
+          ].map((item) => (
             <Link
               key={item.label}
               href={item.path}
-              className={`flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition ${
-                pathname === item.path ? 'bg-indigo-50 text-indigo-700' : 'text-slate-500 hover:bg-slate-50'
+              className={`flex items-center gap-4 px-4 py-3 rounded-2xl transition-all ${
+                pathname === item.path ? 'bg-white/10 text-white' : 'hover:bg-white/5 text-indigo-100/60'
               }`}
             >
-              <item.icon size={18} />
-              {item.label}
-            </Link>
-          ))}
-          <div className="mb-2 mt-6 text-[10px] font-semibold tracking-widest text-slate-300 uppercase">Categories</div>
-          {CATEGORIES.map((item) => (
-            <Link
-              key={item.label}
-              href={`/files?category=${item.category}`}
-              className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-slate-500 hover:bg-slate-50 transition"
-            >
-              <item.icon size={18} />
-              {item.label}
+              <item.icon size={22} strokeWidth={pathname === item.path ? 2.5 : 2} />
+              <span className="font-semibold text-sm">{item.label}</span>
             </Link>
           ))}
         </nav>
+
+        <div className="mt-auto">
+          <div className="bg-white/10 rounded-3xl p-5 text-white">
+             <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-4">🚀</div>
+             <div className="font-bold text-sm">Upgrade to PRO</div>
+             <p className="text-[11px] opacity-60 mt-1 leading-relaxed">Get all features and unlimited storage now!</p>
+             <button className="mt-4 w-full bg-white text-indigo-600 py-2.5 rounded-xl text-xs font-bold shadow-md hover:bg-indigo-50 transition">Upgrade Now</button>
+          </div>
+        </div>
       </aside>
 
       {/* Mobile Bottom Nav */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 flex items-center justify-around bg-white border-t border-slate-200 p-3 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
-        {NAV_ITEMS.map((item) => (
+      <div className="md:hidden fixed bottom-6 left-6 right-6 z-50 flex items-center justify-around bg-white/90 backdrop-blur-xl border border-white/20 p-4 rounded-[2.5rem] shadow-2xl ring-1 ring-black/5">
+        {[
+          { label: 'Home', icon: LayoutDashboard, path: '/' },
+          { label: 'Files', icon: FolderOpen, path: '/files' },
+          { label: 'Settings', icon: Settings, path: '/settings' },
+        ].map((item) => (
           <button
             key={item.label}
-            onClick={() => {
-              setActiveMobileSection(item.label)
-              router.push(item.path)
-            }}
-            className={`flex flex-col items-center gap-1 ${
-              pathname === item.path ? 'text-indigo-600' : 'text-slate-400'
+            onClick={() => router.push(item.path)}
+            className={`flex flex-col items-center transition-all ${
+              pathname === item.path ? 'text-indigo-600 scale-110' : 'text-slate-400'
             }`}
           >
-            <item.icon size={22} />
-            <span className="text-[10px] font-medium">{item.label}</span>
+            <item.icon size={24} />
           </button>
         ))}
       </div>
@@ -219,76 +217,27 @@ export function StorageCards() {
   }, [])
 
   const byCat = stats?.byCategory || {}
-  // Total used by files on disk — each card shows category/fileTotal
   const fileTotal = Object.values(byCat as Record<string, number>).reduce((a, b) => a + (b || 0), 0) || 1
 
   const cards = [
-    {
-      label: 'Documents',
-      icon: FileText,
-      value: formatBytes(byCat.documents || 0),
-      total: formatBytes(fileTotal),
-      pct: Math.min(100, Math.round(((byCat.documents || 0) / fileTotal) * 100)),
-      color: 'from-blue-500 to-indigo-500',
-      category: 'documents',
-    },
-    {
-      label: 'Images',
-      icon: ImageIcon,
-      value: formatBytes(byCat.images || 0),
-      total: formatBytes(fileTotal),
-      pct: Math.min(100, Math.round(((byCat.images || 0) / fileTotal) * 100)),
-      color: 'from-rose-500 to-pink-500',
-      category: 'images',
-    },
-    {
-      label: 'Videos',
-      icon: Video,
-      value: formatBytes(byCat.videos || 0),
-      total: formatBytes(fileTotal),
-      pct: Math.min(100, Math.round(((byCat.videos || 0) / fileTotal) * 100)),
-      color: 'from-amber-500 to-orange-500',
-      category: 'videos',
-    },
-    {
-      label: 'Others',
-      icon: Archive,
-      value: formatBytes((byCat.others || 0) + (byCat.audio || 0) + (byCat.archives || 0)),
-      total: formatBytes(fileTotal),
-      pct: Math.min(
-        100,
-        Math.round((((byCat.others || 0) + (byCat.audio || 0) + (byCat.archives || 0)) / fileTotal) * 100)
-      ),
-      color: 'from-emerald-500 to-teal-500',
-      category: 'archives',
-    },
+    { label: 'Images', icon: ImageIcon, color: 'bg-indigo-500', value: byCat.images || 0 },
+    { label: 'Videos', icon: Video, color: 'bg-rose-500', value: byCat.videos || 0 },
+    { label: 'Music', icon: Music, color: 'bg-orange-500', value: byCat.audio || 0 },
+    { label: 'Apps', icon: Archive, color: 'bg-blue-500', value: byCat.others || 0 },
   ]
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="flex flex-wrap gap-4">
       {cards.map((c) => (
-        <Link
-          key={c.label}
-          href={`/files?category=${c.category}`}
-          className="group rounded-[1.25rem] bg-white p-4 shadow-sm ring-1 ring-slate-200/70 transition-all duration-200 hover:shadow-md hover:ring-indigo-200 block"
-        >
-          <div className={`inline-flex rounded-xl bg-gradient-to-br ${c.color} p-2.5 text-white shadow-sm`}>
-            <c.icon size={20} />
-          </div>
-          <div className="mt-3 text-sm font-medium text-slate-400">{c.label}</div>
-          <div className="mt-1 flex items-baseline gap-1">
-            <span className="text-xl font-bold text-slate-800">{c.value}</span>
-            <span className="text-xs text-slate-400">/ {c.total}</span>
-          </div>
-          <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
-            <div
-              className={`h-full rounded-full bg-gradient-to-r ${c.color} transition-all duration-500`}
-              style={{ width: `${Math.max(c.pct, 4)}%` }}
-            />
-          </div>
-          <div className="mt-1.5 text-right text-[11px] text-slate-400">{c.pct}%</div>
-        </Link>
+        <div key={c.label} className="flex h-[100px] w-[100px] flex-col items-center justify-center gap-2 rounded-3xl bg-white shadow-sm ring-1 ring-slate-100 transition hover:shadow-md">
+           <div className={`p-2 rounded-xl text-white ${c.color}`}><c.icon size={20} /></div>
+           <span className="text-xs font-bold text-slate-700">{c.label}</span>
+        </div>
       ))}
+      <div className="flex h-[100px] w-[100px] flex-col items-center justify-center rounded-3xl border-2 border-dashed border-slate-200 text-slate-300">
+        <span className="text-2xl font-light">+</span>
+        <span className="text-[10px] font-bold">Add</span>
+      </div>
     </div>
   )
 }
