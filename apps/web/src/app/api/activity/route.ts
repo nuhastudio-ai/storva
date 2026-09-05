@@ -1,4 +1,5 @@
 import { repository } from '../../../lib/repository'
+import { getCurrentUser } from '@/lib/authUtils'
 
 export async function GET(req: Request) {
   try {
@@ -11,7 +12,10 @@ export async function GET(req: Request) {
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
-        include: { file: { select: { name: true, relativePath: true, isFolder: true } } },
+        include: { 
+          file: { select: { name: true, relativePath: true, isFolder: true } },
+          user: { select: { username: true } }
+        },
       }),
       repository.activity.count(),
     ])
@@ -24,11 +28,19 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    const { userId, action, fileId, metadata } = await req.json()
-    if (!userId || !action) return Response.json({ error: 'userId and action required' }, { status: 400 })
+    const currentUser = await getCurrentUser(req)
+    if (!currentUser) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const { action, fileId, metadata } = await req.json()
+    if (!action) return Response.json({ error: 'action required' }, { status: 400 })
 
     const activity = await repository.activity.create({
-      data: { userId, action, fileId, metadata: metadata ? JSON.stringify(metadata) : null },
+      data: { 
+        userId: currentUser.id, 
+        action, 
+        fileId, 
+        metadata: metadata ? JSON.stringify(metadata) : null 
+      },
     })
     return Response.json({ success: true, id: activity.id }, { status: 201 })
   } catch (err: any) {
