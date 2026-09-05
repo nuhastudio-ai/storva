@@ -824,7 +824,6 @@ function FilesContent() {
           </div>
         </div>
       )}
-      </div>
     </main>
   )
 }
