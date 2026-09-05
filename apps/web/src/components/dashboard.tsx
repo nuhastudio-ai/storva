@@ -69,10 +69,31 @@ function formatDate(dateStr: string) {
   })
 }
 
+export function TabSwitcher({ tabs, activeTab, onChange }: { tabs: string[], activeTab: string, onChange: (tab: string) => void }) {
+  return (
+    <div className="flex gap-1 p-1 bg-slate-100 rounded-xl mb-6">
+      {tabs.map(tab => (
+        <button 
+          key={tab}
+          onClick={() => onChange(tab)}
+          className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${
+            activeTab === tab ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          {tab}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 export function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const { user, loading } = useAuth()
+
+  // Mobile section state
+  const [activeMobileSection, setActiveMobileSection] = useState('Dashboard')
 
   const handleSignOut = async () => {
     await fetch('/api/auth/logout', { method: 'POST' })
@@ -81,75 +102,72 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="flex flex-col rounded-[1.5rem] bg-white/90 p-5 shadow-sm ring-1 ring-slate-200/70">
-      {/* Logo */}
-      <div>
-        <Link href="/" className="text-2xl font-black tracking-tight text-indigo-600">
-          Storva
-        </Link>
-        <div className="text-[11px] font-medium tracking-wide text-slate-400 uppercase">Your Personal Storage</div>
-      </div>
-
-      {/* Auth Widget removed */}
-
-      <nav className="mt-6 flex flex-1 flex-col gap-1 text-[13px] font-medium">
-        <div className="mb-2 text-[10px] font-semibold tracking-widest text-slate-300 uppercase">Home</div>
-        {NAV_ITEMS.map((item) => {
-          const isActive = item.path === '/' ? pathname === '/' : pathname?.startsWith(item.path)
-          return (
-            <Link
-              key={item.label}
-              href={item.path}
-              className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-left transition-all duration-200 ${
-                isActive
-                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/25'
-                  : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
-              }`}
-            >
-              <item.icon size={18} strokeWidth={isActive ? 2.2 : 1.8} />
-              {item.label}
-            </Link>
-          )
-        })}
-
-        <div className="mb-2 mt-6 text-[10px] font-semibold tracking-widest text-slate-300 uppercase">Categories</div>
-        {CATEGORIES.map((item) => (
-          <Link
-            key={item.label}
-            href={`/files?category=${item.category}`}
-            className="flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-left text-slate-500 transition-all duration-200 hover:bg-slate-100 hover:text-slate-700"
-          >
-            <item.icon size={18} strokeWidth={1.8} />
-            {item.label}
+    <>
+      {/* Desktop Sidebar */}
+      <aside className="hidden md:flex flex-col rounded-[1.5rem] bg-white/90 p-5 shadow-sm ring-1 ring-slate-200/70">
+        {/* Logo ... */}
+        <div>
+          <Link href="/" className="text-2xl font-black tracking-tight text-indigo-600">
+            Storva
           </Link>
-        ))}
-
-        {user && (
-          <>
-            <div className="mb-2 mt-6 text-[10px] font-semibold tracking-widest text-slate-300 uppercase">System</div>
-            {SYSTEM.map((item) => (
+          <div className="text-[11px] font-medium tracking-wide text-slate-400 uppercase">Your Personal Storage</div>
+        </div>
+        
+        <nav className="mt-6 flex flex-1 flex-col gap-1 text-[13px] font-medium">
+          {/* ... nav items ... */}
+          <div className="mb-2 text-[10px] font-semibold tracking-widest text-slate-300 uppercase">Home</div>
+          {NAV_ITEMS.map((item) => {
+            const isActive = item.path === '/' ? pathname === '/' : pathname?.startsWith(item.path)
+            return (
               <Link
                 key={item.label}
                 href={item.path}
-                className="flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-left text-slate-500 transition-all duration-200 hover:bg-slate-100 hover:text-slate-700"
+                className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-left transition-all duration-200 ${
+                  isActive
+                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/25'
+                    : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
+                }`}
               >
-                <item.icon size={18} strokeWidth={1.8} />
+                <item.icon size={18} strokeWidth={isActive ? 2.2 : 1.8} />
                 {item.label}
               </Link>
-            ))}
-            {user.role?.toLowerCase() === 'admin' && (
-              <Link
-                href="/settings/users"
-                className="flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-left text-slate-500 transition-all duration-200 hover:bg-slate-100 hover:text-slate-700"
-              >
-                <User size={18} strokeWidth={1.8} />
-                Users
-              </Link>
-            )}
-          </>
-        )}
-      </nav>
-    </aside>
+            )
+          })}
+          
+          <div className="mb-2 mt-6 text-[10px] font-semibold tracking-widest text-slate-300 uppercase">Categories</div>
+          {CATEGORIES.map((item) => (
+            <Link
+              key={item.label}
+              href={`/files?category=${item.category}`}
+              className="flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-left text-slate-500 transition-all duration-200 hover:bg-slate-100 hover:text-slate-700"
+            >
+              <item.icon size={18} strokeWidth={1.8} />
+              {item.label}
+            </Link>
+          ))}
+        </nav>
+      </aside>
+
+      {/* Mobile Bottom Nav */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 flex items-center justify-around bg-white/90 backdrop-blur-md border-t border-slate-200 p-2 pb-4 shadow-lg">
+        {['Dashboard', 'Files', 'Recent', 'Categories', 'Settings'].map((label) => (
+          <button
+            key={label}
+            onClick={() => setActiveMobileSection(label)}
+            className={`flex flex-col items-center gap-1 p-2 text-[10px] ${
+              activeMobileSection === label ? 'text-indigo-600' : 'text-slate-400'
+            }`}
+          >
+            {label === 'Dashboard' && <LayoutDashboard size={20} />}
+            {label === 'Files' && <FolderOpen size={20} />}
+            {label === 'Recent' && <Clock size={20} />}
+            {label === 'Categories' && <Archive size={20} />}
+            {label === 'Settings' && <Settings size={20} />}
+            {label}
+          </button>
+        ))}
+      </div>
+    </>
   )
 }
 
