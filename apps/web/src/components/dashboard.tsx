@@ -419,6 +419,7 @@ export function FoldersCard() {
 export function RightPanel() {
   const [stats, setStats] = useState<any>(null)
   const [activities, setActivities] = useState<any[]>([])
+  const { user, loading } = useAuth()
 
   useEffect(() => {
     fetch('/api/storage/status')
@@ -457,7 +458,7 @@ export function RightPanel() {
               </div>
             </div>
             <button
-              onClick={handleSignOut}
+              onClick={() => { fetch('/api/auth/logout', { method: 'POST' }); window.location.reload(); }}
               title="Sign Out"
               className="ml-2 flex items-center justify-center rounded-lg p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-500"
             >
