@@ -7,11 +7,13 @@ import { useState, useEffect } from 'react'
 type Activity = {
   id: string
   userId: string
+  username?: string
   action: string
   fileId: string | null
   metadata: string | null
   createdAt: string
   file?: { name: string; relativePath: string; isFolder: boolean } | null
+  user?: { username: string } | null
 }
 
 function actionLabel(action: string) {
@@ -103,7 +105,6 @@ export default function ActivitySettingsPage() {
                   const fileName = act.file?.name ?? (typeof path === 'string' ? path.split(/[/\\]/).pop() ?? '' : '')
                   const { label, color, icon: Icon } = actionLabel(act.action)
 
-                  // Enrich description
                   let description = fileName
                   if (act.action === 'file:rename') {
                     description = `"${meta.oldName}" → "${meta.newName}" in "${meta.dirPath || '/'}"`
@@ -126,7 +127,10 @@ export default function ActivitySettingsPage() {
                         <Icon size={16} />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-slate-700">{label}</p>
+                        <p className="text-sm font-medium text-slate-700">
+                          <span className="font-bold text-indigo-600">{act.user?.username || 'System'} </span>
+                          {label}
+                        </p>
                         <p className="mt-0.5 truncate text-xs text-slate-400">{description}</p>
                       </div>
                       <span className="whitespace-nowrap text-xs text-slate-400">{formatTime(act.createdAt)}</span>
