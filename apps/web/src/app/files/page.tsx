@@ -396,9 +396,8 @@ function FilesContent() {
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className="min-h-dvh bg-[#f3f6fa] text-slate-700"
+      className="min-h-screen bg-[radial-gradient(circle_at_top_left,_#eef2ff,_transparent_34%),linear-gradient(180deg,#f8fafc_0%,#eef2ff_100%)] p-3 text-slate-700 md:p-6"
     >
-      <div className="mx-auto flex min-h-dvh w-full max-w-[1800px] gap-0 overflow-hidden md:p-5">
       {/* Toast */}
       {toast && (
         <div className={`fixed top-6 right-6 z-50 flex items-center gap-3 rounded-2xl px-5 py-3 shadow-xl backdrop-blur-md ${toast.type === 'success' ? 'bg-emerald-600/90 text-white' : 'bg-rose-600/90 text-white'
@@ -413,11 +412,7 @@ function FilesContent() {
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-indigo-600/20 backdrop-blur-sm">
           <div className="flex flex-col items-center rounded-3xl bg-white p-8 shadow-2xl ring-4 ring-indigo-500/30">
             <Upload size={48} className="animate-bounce text-indigo-600" />
-            <p className="mt-4 text-lg font-bold text-slate-800">Drop files here to upload</p>
-            <p className="text-xs text-slate-500">
-              Into <span className="font-semibold">{activeVol?.label}</span>
-              {currentPath ? ` / ${currentPath}` : ' / root'}
-            </p>
+            <p className="mt-4 text-lg font-bold text-slate-700">Drop files here to upload</p>
           </div>
         </div>
       )}

@@ -124,6 +124,24 @@ export function Sidebar() {
               <span className="font-semibold text-sm">{item.label}</span>
             </Link>
           ))}
+
+          {user?.role?.toLowerCase() === 'admin' && (
+            <>
+              <div className="pt-3 text-[10px] font-semibold uppercase tracking-[0.24em] text-indigo-100/45">Settings</div>
+              {SYSTEM.map((item) => (
+                <Link
+                  key={item.label}
+                  href={item.path}
+                  className={`flex items-center gap-4 px-4 py-3 rounded-2xl transition-all ${
+                    pathname === item.path ? 'bg-white/10 text-white' : 'hover:bg-white/5 text-indigo-100/60'
+                  }`}
+                >
+                  <item.icon size={22} strokeWidth={pathname === item.path ? 2.5 : 2} />
+                  <span className="font-semibold text-sm">{item.label}</span>
+                </Link>
+              ))}
+            </>
+          )}
         </nav>
 
         <div className="mt-auto">
