@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { HardDrive, Mail, Lock, Eye, EyeOff, ArrowRight, Sparkles } from 'lucide-react'
+import { HardDrive, Mail, Lock, Eye, EyeOff, ArrowRight, Sparkles, X } from 'lucide-react'
 
 export default function Login() {
   const router = useRouter()
@@ -83,8 +83,44 @@ export default function Login() {
           borderRadius: 24,
           overflow: 'hidden',
           boxShadow: '0 25px 60px -12px rgba(0,0,0,0.25), 0 0 0 1px rgba(255,255,255,0.3)',
+          position: 'relative',
         }}
       >
+        {/* Close Button */}
+        <button
+          onClick={() => router.push('/')}
+          style={{
+            position: 'absolute',
+            top: 20,
+            right: 20,
+            zIndex: 10,
+            width: 36,
+            height: 36,
+            borderRadius: '50%',
+            background: 'rgba(255,255,255,0.8)',
+            backdropFilter: 'blur(8px)',
+            border: '1px solid rgba(0,0,0,0.05)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            color: '#64748b',
+            transition: 'all 0.2s',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = '#ffffff'
+            e.currentTarget.style.color = '#ef4444'
+            e.currentTarget.style.transform = 'scale(1.1)'
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'rgba(255,255,255,0.8)'
+            e.currentTarget.style.color = '#64748b'
+            e.currentTarget.style.transform = 'scale(1)'
+          }}
+        >
+          <X size={18} />
+        </button>
         {/* ─── Left Panel: Branding ─── */}
         <div
           style={{
