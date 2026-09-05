@@ -124,17 +124,21 @@ export function Sidebar() {
           </Link>
         ))}
 
-        <div className="mb-2 mt-6 text-[10px] font-semibold tracking-widest text-slate-300 uppercase">System</div>
-        {SYSTEM.map((item) => (
-          <Link
-            key={item.label}
-            href={item.path}
-            className="flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-left text-slate-500 transition-all duration-200 hover:bg-slate-100 hover:text-slate-700"
-          >
-            <item.icon size={18} strokeWidth={1.8} />
-            {item.label}
-          </Link>
-        ))}
+        {user && (
+          <>
+            <div className="mb-2 mt-6 text-[10px] font-semibold tracking-widest text-slate-300 uppercase">System</div>
+            {SYSTEM.map((item) => (
+              <Link
+                key={item.label}
+                href={item.path}
+                className="flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-left text-slate-500 transition-all duration-200 hover:bg-slate-100 hover:text-slate-700"
+              >
+                <item.icon size={18} strokeWidth={1.8} />
+                {item.label}
+              </Link>
+            ))}
+          </>
+        )}
       </nav>
     </aside>
   )
@@ -484,45 +488,49 @@ export function RightPanel() {
         Search Drive & Files
       </Link>
 
-      <div className="mt-6">
-        <h3 className="text-sm font-semibold text-slate-800">Storage Drive</h3>
-        <div
-          className="mt-4 mx-auto flex h-44 w-44 items-center justify-center rounded-full p-5"
-          style={{
-            background: `conic-gradient(#4f46e5 0% ${percentUsed}%, #e2e8f0 ${percentUsed}% 100%)`,
-          }}
-        >
-          <div className="flex h-full w-full items-center justify-center rounded-full bg-white shadow-inner">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-indigo-600">{formatBytes(usedBytes)}</div>
-              <div className="text-[11px] text-slate-400">Used of {formatBytes(totalBytes)}</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-6">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-slate-800">Activities</h3>
-          <Link href="/settings/activity" className="text-xs font-medium text-indigo-600">
-            View All
-          </Link>
-        </div>
-        <div className="mt-3 space-y-3">
-          {activities.length === 0 ? (
-            <div className="rounded-xl bg-slate-50/80 p-3 text-xs text-slate-400">No recent activities</div>
-          ) : (
-            activities.map((act, i) => (
-              <div key={i} className="rounded-xl bg-slate-50/80 p-3">
-                <div className="text-[10px] font-medium text-indigo-500">{formatDate(act.createdAt)}</div>
-                <div className="mt-1 text-sm text-slate-600">
-                  <span className="font-semibold">{act.action}</span>
+      {user && (
+        <>
+          <div className="mt-6">
+            <h3 className="text-sm font-semibold text-slate-800">Storage Drive</h3>
+            <div
+              className="mt-4 mx-auto flex h-44 w-44 items-center justify-center rounded-full p-5"
+              style={{
+                background: `conic-gradient(#4f46e5 0% ${percentUsed}%, #e2e8f0 ${percentUsed}% 100%)`,
+              }}
+            >
+              <div className="flex h-full w-full items-center justify-center rounded-full bg-white shadow-inner">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-indigo-600">{formatBytes(usedBytes)}</div>
+                  <div className="text-[11px] text-slate-400">Used of {formatBytes(totalBytes)}</div>
                 </div>
               </div>
-            ))
-          )}
-        </div>
-      </div>
+            </div>
+          </div>
+
+          <div className="mt-6">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-slate-800">Activities</h3>
+              <Link href="/settings/activity" className="text-xs font-medium text-indigo-600">
+                View All
+              </Link>
+            </div>
+            <div className="mt-3 space-y-3">
+              {activities.length === 0 ? (
+                <div className="rounded-xl bg-slate-50/80 p-3 text-xs text-slate-400">No recent activities</div>
+              ) : (
+                activities.map((act, i) => (
+                  <div key={i} className="rounded-xl bg-slate-50/80 p-3">
+                    <div className="text-[10px] font-medium text-indigo-500">{formatDate(act.createdAt)}</div>
+                    <div className="mt-1 text-sm text-slate-600">
+                      <span className="font-semibold">{act.action}</span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </>
+      )}
 
       <div className="mt-auto rounded-[1.25rem] bg-gradient-to-br from-violet-50 to-indigo-50 p-5 text-center ring-1 ring-indigo-100/50">
         <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-lg shadow-indigo-400/30">
