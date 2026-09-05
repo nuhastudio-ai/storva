@@ -1,4 +1,5 @@
 import { repository } from '@/lib/repository'
+import { getCurrentUser } from '@/lib/authUtils'
 import { signAgentToken } from '@storva/shared-auth'
 import { NextRequest, NextResponse } from 'next/server'
 
@@ -15,14 +16,6 @@ function getTimeout(pathParts: string[]): number {
   return LONG_PATHS.has(first) ? LONG_TIMEOUT_MS : SHORT_TIMEOUT_MS
 }
 
-async function getUserId(req: NextRequest): Promise<string | null> {
-  const token = req.cookies.get('session')?.value
-  if (!token) return null
-  const session = await repository.session.findFirst({
-    where: { tokenHash: token, expiresAt: { gte: new Date() } },
-  })
-  return session?.userId ?? null
-}
 
 function getAllScopes(): Array<'storage:read' | 'storage:write' | 'storage:delete' | 'storage:share'> {
   return ['storage:read', 'storage:write', 'storage:delete', 'storage:share']
@@ -39,7 +32,8 @@ export async function HEAD(req: NextRequest, props: Props)   { return proxy(req,
 
 async function proxy(req: NextRequest, params: { path: string[] }) {
   try {
-    const userId = (await getUserId(req)) || 'dev-user'
+    const currentUser = await getCurrentUser(req)
+    const userId = currentUser?.id || 'dev-user'
     const token  = await signAgentToken(userId, 'web-proxy', getAllScopes(), 300)
 
     const agentUrl = process.env.STORVA_AGENT_URL || 'http://127.0.0.1:5125'
