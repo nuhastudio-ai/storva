@@ -137,6 +137,15 @@ export function Sidebar() {
                 {item.label}
               </Link>
             ))}
+            {user.role?.toLowerCase() === 'admin' && (
+              <Link
+                href="/settings/users"
+                className="flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-left text-slate-500 transition-all duration-200 hover:bg-slate-100 hover:text-slate-700"
+              >
+                <User size={18} strokeWidth={1.8} />
+                Users
+              </Link>
+            )}
           </>
         )}
       </nav>
