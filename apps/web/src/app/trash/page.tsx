@@ -140,10 +140,10 @@ export default function TrashPage() {
         </div>
       )}
 
-      <div className="mx-auto grid min-h-[920px] h-dvh grid-rows-[auto_minmax(0,1fr)] grid-w-[1440px] items-start content-start overflow-hidden gap-0 md:grid-rows-none md:gap-6 rounded-[2rem] border border-white/70 bg-white/70 pt-0 p-3 shadow-[0_20px_80px_rgba(99,102,241,0.12)] backdrop-blur-xl md:grid-cols-[240px_1fr_320px] md:p-5">
+      <div className="mx-auto flex flex-col h-screen overflow-hidden border border-white/70 bg-white/70 shadow-[0_20px_80px_rgba(99,102,241,0.12)] backdrop-blur-xl md:grid md:h-dvh md:min-h-[920px] grid-w-[1440px] md:grid-cols-[240px_1fr_320px] md:gap-6 md:rounded-[2rem] md:p-5">
         <Sidebar />
 
-        <section className="min-h-0 space-y-5 overflow-y-auto pr-1 md:h-full md:min-h-0">
+        <section className="flex-1 min-h-0 space-y-5 overflow-y-auto p-4 md:p-0 md:pr-1 md:h-full">
           <header className="sticky top-0 z-20 flex items-center justify-between rounded-[1.5rem] bg-white p-6 shadow-sm ring-1 ring-slate-200/70">
             <div>
               <div className="flex items-center gap-2">
