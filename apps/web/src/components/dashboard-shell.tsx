@@ -6,7 +6,6 @@ import { useAuth } from '@/lib/auth'
 import { DevicePicker } from './device-picker'
 import { useDashboardData } from '@/lib/dashboard-data'
 import { useConnectionStatus } from '@/lib/useConnectionStatus'
-import { useAuth } from '@/lib/auth'
 
 function formatBytes(bytes = 0) {
   if (!bytes) return '0 B'
