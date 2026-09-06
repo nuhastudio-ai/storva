@@ -168,7 +168,7 @@ export function Sidebar() {
       )}
 
       {/* Desktop Sidebar */}
-      <aside className="hidden md:flex min-h-[920px] h-dvh w-[240px] flex-col overflow-hidden rounded-l-[2rem] bg-indigo-600 p-6 pb-6 text-indigo-100">
+      <aside className="hidden md:flex h-full min-h-0 w-[240px] flex-col overflow-hidden rounded-[2rem] bg-indigo-600 p-6 pb-6 text-indigo-100">
         <div className="mb-12 flex justify-center">
           <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-indigo-600 font-black text-2xl shadow-lg">P</div>
         </div>
