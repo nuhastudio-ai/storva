@@ -1,7 +1,10 @@
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/authUtils'
 
-export async function GET(req: Request) {
+export async function GET(req: Request) { return handleLogout(req) }
+export async function POST(req: Request) { return handleLogout(req) }
+
+async function handleLogout(req: Request) {
   try {
     const user = await getCurrentUser(req)
     if (!user) {
