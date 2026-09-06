@@ -109,7 +109,10 @@ export function Sidebar() {
         <button onClick={() => setIsMobileOpen(true)} className="p-2 text-slate-600"><Menu size={20} /></button>
         <div className="font-bold text-lg text-indigo-600">Storva</div>
         {user ? (
-          <button onClick={handleSignOut} className="p-2 text-slate-600"><LogIn size={20} /></button>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-slate-700">{user.username}</span>
+            <button onClick={handleSignOut} className="p-2 text-slate-600"><LogOut size={20} /></button>
+          </div>
         ) : (
           <Link href="/login" className="p-2 text-slate-600"><LogIn size={20} /></Link>
         )}
