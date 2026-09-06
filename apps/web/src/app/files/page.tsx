@@ -435,10 +435,7 @@ function FilesContent() {
               </p>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 shrink-0">
-              {/* Volume switcher */}
-              <VolumeSwitcher volumes={volumes} activeVol={activeVol} onChange={handleVolumeChange} />
-
+            <div className="flex flex-wrap items-center gap-2">
               <input
                 id="file-upload-input"
                 type="file"
@@ -470,7 +467,7 @@ function FilesContent() {
               <button
                 onClick={loadFiles}
                 title="Refresh"
-                className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition"
               >
                 <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
               </button>
@@ -479,7 +476,9 @@ function FilesContent() {
 
           {/* Breadcrumb + controls */}
           <div className="flex flex-col gap-3 rounded-[1.25rem] bg-white/90 p-4 shadow-sm ring-1 ring-slate-200/70 md:flex-row md:items-center md:justify-between">
-            <nav className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
+            <div className="flex items-center gap-3">
+              <VolumeSwitcher volumes={volumes} activeVol={activeVol} onChange={handleVolumeChange} />
+              <nav className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
               {breadcrumbs.map((crumb, idx) => {
                 const isLast = idx === breadcrumbs.length - 1
                 return (
@@ -498,7 +497,8 @@ function FilesContent() {
                   </React.Fragment>
                 )
               })}
-            </nav>
+              </nav>
+            </div>
 
             <div className="flex items-center gap-2">
               <div className="relative flex-1 md:w-56">
