@@ -9,6 +9,12 @@ export async function GET(req: Request) {
     }
 
     // Delete session cookie (client will clear)
+    await prisma.session.delete({
+      where: {
+        userId: user.id,
+      },
+    })
+
     const cookie = 'session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0'
     return new Response(JSON.stringify({ success: true }), {
       status: 200,
