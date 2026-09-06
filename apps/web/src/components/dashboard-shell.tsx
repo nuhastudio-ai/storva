@@ -6,6 +6,7 @@ import { useAuth } from '@/lib/auth'
 import { DevicePicker } from './device-picker'
 import { useDashboardData } from '@/lib/dashboard-data'
 import { useConnectionStatus } from '@/lib/useConnectionStatus'
+import { useAuth } from '@/lib/auth'
 
 function formatBytes(bytes = 0) {
   if (!bytes) return '0 B'
@@ -17,6 +18,7 @@ function formatBytes(bytes = 0) {
 export function DashboardShell() {
   const { storage } = useDashboardData()
   const connection = useConnectionStatus()
+  const { user } = useAuth()
   const percentUsed = Math.round(storage?.percentUsed ?? 0)
   const status = percentUsed >= 95 ? 'Critical' : percentUsed >= 85 ? 'Warning' : 'Healthy'
   const statusColor = percentUsed >= 95 ? 'text-rose-600' : percentUsed >= 85 ? 'text-amber-600' : 'text-emerald-600'
