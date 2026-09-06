@@ -129,12 +129,7 @@ export function Sidebar() {
             <button onClick={() => setIsMobileOpen(false)} className="absolute top-4 right-4 p-2"><X /></button>
             <div className="mb-12 text-center font-extrabold text-3xl tracking-tight text-white">Storva.</div>
             <nav className="flex-1 space-y-4">
-              {[
-                { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
-                { label: 'Files', icon: FolderOpen, path: '/files' },
-                { label: 'Recent', icon: Clock, path: '/recent' },
-                { label: 'Trash', icon: Trash2, path: '/trash' },
-              ].map((item) => (
+              {(user ? NAV_ITEMS : [{ label: 'My Files', icon: FolderOpen, path: '/files' }]).map((item) => (
                 <Link
                   key={item.label}
                   href={item.path}
@@ -175,12 +170,7 @@ export function Sidebar() {
         </div>
 
         <nav className="flex-1 space-y-4">
-          {[
-            { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
-            { label: 'Files', icon: FolderOpen, path: '/files' },
-            { label: 'Recent', icon: Clock, path: '/recent' },
-            { label: 'Trash', icon: Trash2, path: '/trash' },
-          ].map((item) => (
+          {(user ? NAV_ITEMS : [{ label: 'My Files', icon: FolderOpen, path: '/files' }]).map((item) => (
             <Link
               key={item.label}
               href={item.path}
