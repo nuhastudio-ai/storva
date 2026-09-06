@@ -12,7 +12,7 @@ import {
   List as ListIcon, ChevronRight, Download, Trash2, Edit2,
   FileText, Image as ImageIcon, Video, Music, Archive, File,
   X, Eye, RefreshCw, CheckCircle, AlertCircle, ArrowUpDown,
-  HardDrive, ChevronDown,
+  HardDrive, ChevronDown, ArrowLeft,
 } from 'lucide-react'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -276,6 +276,13 @@ function FilesContent() {
     }
   }, [activeVol, currentPath])
 
+  const handleBack = useCallback(() => {
+    const parts = currentPath.split(/[/\\]/).filter(Boolean)
+    if (parts.length === 0) return
+    const parentPath = parts.slice(0, -1).join('/')
+    navigateToFolder(parentPath)
+  }, [currentPath, activeVol])
+
   useEffect(() => { loadFiles() }, [loadFiles])
 
   // ── Navigation ─────────────────────────────────────────────────────────────
@@ -475,8 +482,17 @@ function FilesContent() {
           </header>
 
           {/* Breadcrumb + controls */}
-          <div className="flex flex-col gap-3 rounded-[1.25rem] bg-white/90 p-4 shadow-sm ring-1 ring-slate-200/70 md:flex-row md:items-center md:justify-between">
+          <div className="sticky top-[88px] z-10 flex flex-col gap-3 rounded-[1.25rem] bg-white/95 backdrop-blur-md p-4 shadow-sm ring-1 ring-slate-200/70 md:flex-row md:items-center md:justify-between">
             <div className="flex items-center gap-3">
+              {currentPath && (
+                <button
+                  onClick={handleBack}
+                  className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-50 text-slate-600 ring-1 ring-slate-200 hover:bg-slate-100 transition"
+                  title="Go back"
+                >
+                  <ArrowLeft size={16} />
+                </button>
+              )}
               <VolumeSwitcher volumes={volumes} activeVol={activeVol} onChange={handleVolumeChange} />
               <nav className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
               {breadcrumbs.map((crumb, idx) => {
