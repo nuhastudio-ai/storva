@@ -169,8 +169,8 @@ export function Sidebar() {
       )}
 
       {/* Desktop Sidebar */}
-      <aside className="hidden md:flex h-full min-h-0 w-[240px] flex-col overflow-hidden rounded-[2rem] bg-indigo-600 p-6 pb-6 text-indigo-100">
-        <div className="mb-12 flex justify-center">
+      <aside className="hidden md:flex h-full min-h-0 w-[240px] flex-col overflow-hidden rounded-[2rem] bg-indigo-600 pt-12 p-6 pb-6 text-indigo-100">
+        <div className="mb-9 flex justify-center">
           <div className="font-extrabold text-5xl tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-indigo-200">Storva.</div>
         </div>
 
