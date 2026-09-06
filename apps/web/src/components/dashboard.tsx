@@ -75,12 +75,11 @@ export function TabSwitcher({ tabs, activeTab, onChange }: { tabs: string[], act
   return (
     <div className="flex gap-1 p-1 bg-slate-100 rounded-xl mb-6">
       {tabs.map(tab => (
-        <button 
+        <button
           key={tab}
           onClick={() => onChange(tab)}
-          className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${
-            activeTab === tab ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-          }`}
+          className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === tab ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+            }`}
         >
           {tab}
         </button>
@@ -107,7 +106,7 @@ export function Sidebar() {
       {/* Mobile Header */}
       <div className="md:hidden flex items-center justify-between p-4 bg-white/80 backdrop-blur-md sticky top-0 z-50 border-b border-slate-100">
         <button onClick={() => setIsMobileOpen(true)} className="p-2 text-slate-600"><Menu size={20} /></button>
-        <div className="font-bold text-lg text-indigo-600">Storva</div>
+        <div className="font-extrabold text-xl bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-indigo-400">Storva</div>
         {user ? (
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold text-slate-700">{user.username}</span>
@@ -127,7 +126,7 @@ export function Sidebar() {
           <div className="absolute inset-0 bg-black/50" onClick={() => setIsMobileOpen(false)} />
           <aside className="relative w-[280px] bg-indigo-600 p-6 text-indigo-100 flex flex-col">
             <button onClick={() => setIsMobileOpen(false)} className="absolute top-4 right-4 p-2"><X /></button>
-            <div className="mb-12 text-center font-black text-2xl">Storva</div>
+            <div className="mb-12 text-center font-extrabold text-3xl tracking-tight text-white">Storva</div>
             <nav className="flex-1 space-y-4">
               {[
                 { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
@@ -139,9 +138,8 @@ export function Sidebar() {
                   key={item.label}
                   href={item.path}
                   onClick={() => setIsMobileOpen(false)}
-                  className={`flex items-center gap-4 px-4 py-3 rounded-2xl transition-all ${
-                    pathname === item.path ? 'bg-white/10 text-white' : 'hover:bg-white/5 text-indigo-100/60'
-                  }`}
+                  className={`flex items-center gap-4 px-4 py-3 rounded-2xl transition-all ${pathname === item.path ? 'bg-white/10 text-white' : 'hover:bg-white/5 text-indigo-100/60'
+                    }`}
                 >
                   <item.icon size={22} />
                   <span className="font-semibold text-sm">{item.label}</span>
@@ -155,9 +153,8 @@ export function Sidebar() {
                       key={item.label}
                       href={item.path}
                       onClick={() => setIsMobileOpen(false)}
-                      className={`flex items-center gap-4 px-4 py-3 rounded-2xl transition-all ${
-                        pathname === item.path ? 'bg-white/10 text-white' : 'hover:bg-white/5 text-indigo-100/60'
-                      }`}
+                      className={`flex items-center gap-4 px-4 py-3 rounded-2xl transition-all ${pathname === item.path ? 'bg-white/10 text-white' : 'hover:bg-white/5 text-indigo-100/60'
+                        }`}
                     >
                       <item.icon size={22} />
                       <span className="font-semibold text-sm">{item.label}</span>
@@ -173,9 +170,9 @@ export function Sidebar() {
       {/* Desktop Sidebar */}
       <aside className="hidden md:flex h-full min-h-0 w-[240px] flex-col overflow-hidden rounded-[2rem] bg-indigo-600 p-6 pb-6 text-indigo-100">
         <div className="mb-12 flex justify-center">
-          <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-indigo-600 font-black text-2xl shadow-lg">P</div>
+          <div className="font-extrabold text-2xl tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-indigo-200">Storva</div>
         </div>
-        
+
         <nav className="flex-1 space-y-4">
           {[
             { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
@@ -186,9 +183,8 @@ export function Sidebar() {
             <Link
               key={item.label}
               href={item.path}
-              className={`flex items-center gap-4 px-4 py-3 rounded-2xl transition-all ${
-                pathname === item.path ? 'bg-white/10 text-white' : 'hover:bg-white/5 text-indigo-100/60'
-              }`}
+              className={`flex items-center gap-4 px-4 py-3 rounded-2xl transition-all ${pathname === item.path ? 'bg-white/10 text-white' : 'hover:bg-white/5 text-indigo-100/60'
+                }`}
             >
               <item.icon size={22} strokeWidth={pathname === item.path ? 2.5 : 2} />
               <span className="font-semibold text-sm">{item.label}</span>
@@ -202,9 +198,8 @@ export function Sidebar() {
                 <Link
                   key={item.label}
                   href={item.path}
-                  className={`flex items-center gap-4 px-4 py-3 rounded-2xl transition-all ${
-                    pathname === item.path ? 'bg-white/10 text-white' : 'hover:bg-white/5 text-indigo-100/60'
-                  }`}
+                  className={`flex items-center gap-4 px-4 py-3 rounded-2xl transition-all ${pathname === item.path ? 'bg-white/10 text-white' : 'hover:bg-white/5 text-indigo-100/60'
+                    }`}
                 >
                   <item.icon size={22} strokeWidth={pathname === item.path ? 2.5 : 2} />
                   <span className="font-semibold text-sm">{item.label}</span>
@@ -213,15 +208,6 @@ export function Sidebar() {
             </>
           )}
         </nav>
-
-        <div className="mt-auto">
-          <div className="bg-white/10 rounded-3xl p-5 text-white">
-             <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-4">🚀</div>
-             <div className="font-bold text-sm">Upgrade to PRO</div>
-             <p className="text-[11px] opacity-60 mt-1 leading-relaxed">Get all features and unlimited storage now!</p>
-             <button className="mt-4 w-full bg-white text-indigo-600 py-2.5 rounded-xl text-xs font-bold shadow-md hover:bg-indigo-50 transition">Upgrade Now</button>
-          </div>
-        </div>
       </aside>
     </>
   )
@@ -282,7 +268,7 @@ export function StorageCards() {
     fetch('/api/storage/status')
       .then((r) => r.json())
       .then((d) => setStats(d))
-      .catch(() => {})
+      .catch(() => { })
   }, [])
 
   const byCat = stats?.byCategory || {}
@@ -299,8 +285,8 @@ export function StorageCards() {
     <div className="flex flex-wrap gap-4">
       {cards.map((c) => (
         <div key={c.label} className="flex h-[100px] w-[100px] flex-col items-center justify-center gap-2 rounded-3xl bg-white shadow-sm ring-1 ring-slate-100 transition hover:shadow-md">
-           <div className={`p-2 rounded-xl text-white ${c.color}`}><c.icon size={20} /></div>
-           <span className="text-xs font-bold text-slate-700">{c.label}</span>
+          <div className={`p-2 rounded-xl text-white ${c.color}`}><c.icon size={20} /></div>
+          <span className="text-xs font-bold text-slate-700">{c.label}</span>
         </div>
       ))}
       <div className="flex h-[100px] w-[100px] flex-col items-center justify-center rounded-3xl border-2 border-dashed border-slate-200 text-slate-300">
@@ -322,7 +308,7 @@ export function RecentFilesTable() {
         const onlyFiles = (d.items || []).filter((i: any) => !i.isFolder)
         setFiles(onlyFiles.slice(0, 5))
       })
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => setLoading(false))
   }, [])
 
@@ -404,7 +390,7 @@ export function FoldersCard() {
         const onlyFolders = (d.items || []).filter((i: any) => i.isFolder)
         setFolders(onlyFolders.slice(0, 4))
       })
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => setLoading(false))
   }, [])
 
@@ -463,12 +449,12 @@ export function RightPanel() {
     fetch('/api/storage/status')
       .then((r) => r.ok ? r.json() : null)
       .then((d) => setStats(d))
-      .catch(() => {})
+      .catch(() => { })
 
     fetch('/api/activity?page=1&limit=3')
       .then((r) => r.json())
       .then((d) => setActivities(d.items || []))
-      .catch(() => {})
+      .catch(() => { })
   }, [])
 
   const usedBytes = stats?.usedBytes || 0
