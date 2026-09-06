@@ -114,7 +114,10 @@ export function Sidebar() {
             <button onClick={handleSignOut} className="p-2 text-slate-600"><LogOut size={20} /></button>
           </div>
         ) : (
-          <Link href="/login" className="p-2 text-slate-600"><LogIn size={20} /></Link>
+          <Link href="/login" className="flex items-center gap-1.5 p-2 text-slate-600 hover:text-indigo-600 transition">
+            <LogIn size={20} />
+            <span className="text-xs font-semibold">Sign In</span>
+          </Link>
         )}
       </div>
 
