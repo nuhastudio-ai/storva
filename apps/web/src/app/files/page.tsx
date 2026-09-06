@@ -417,12 +417,12 @@ function FilesContent() {
         </div>
       )}
 
-      <div className="mx-auto grid h-[1366px] grid-w-[1440px] overflow-hidden gap-6 rounded-[2rem] border border-white/70 bg-white/70 pt-0 p-3 shadow-[0_20px_80px_rgba(99,102,241,0.12)] backdrop-blur-xl md:grid-cols-[240px_1fr_320px] md:p-5">
+      <div className="mx-auto grid h-[1366px] grid-w-[1440px] items-start overflow-hidden gap-6 rounded-[2rem] border border-white/70 bg-white/70 pt-0 p-3 shadow-[0_20px_80px_rgba(99,102,241,0.12)] backdrop-blur-xl md:grid-cols-[240px_1fr_320px] md:p-5">
         <Sidebar />
 
-        <section className="flex flex-col space-y-5 overflow-hidden">
+        <section className="min-h-0 flex flex-col space-y-5 overflow-y-auto">
           {/* Header */}
-          <header className="flex flex-col gap-4 rounded-[1.5rem] bg-white p-5 shadow-sm ring-1 ring-slate-200/70 md:flex-row md:items-center md:justify-between">
+          <header className="flex flex-wrap items-center justify-between gap-3 rounded-[1.5rem] bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
             <div>
               <div className="flex items-center gap-2">
                 <FolderOpen className="text-indigo-600" size={24} />
@@ -435,7 +435,7 @@ function FilesContent() {
               </p>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
               {/* Volume switcher */}
               <VolumeSwitcher volumes={volumes} activeVol={activeVol} onChange={handleVolumeChange} />
 

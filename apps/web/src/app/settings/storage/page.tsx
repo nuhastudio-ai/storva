@@ -196,7 +196,7 @@ export default function StorageSettingsPage() {
         </div>
       )}
 
-      <div className="mx-auto grid h-[1366px] grid-w-[1440px] overflow-hidden gap-6 rounded-[2rem] border border-white/70 bg-white/70 pt-0 p-3 shadow-[0_20px_80px_rgba(99,102,241,0.12)] backdrop-blur-xl md:grid-cols-[240px_1fr_320px] md:p-5">
+      <div className="mx-auto grid h-[1366px] grid-w-[1440px] items-start overflow-hidden gap-6 rounded-[2rem] border border-white/70 bg-white/70 pt-0 p-3 shadow-[0_20px_80px_rgba(99,102,241,0.12)] backdrop-blur-xl md:grid-cols-[240px_1fr_320px] md:p-5">
         <Sidebar />
 
         <section className="min-h-0 space-y-6 overflow-y-auto pr-1">
@@ -208,11 +208,11 @@ export default function StorageSettingsPage() {
                 Manage up to {MAX_VOLUMES} storage locations. Enable or disable each independently.
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
               <button
                 onClick={() => fetchVolumes()}
                 title="Refresh"
-                className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-indigo-600 shadow-sm transition hover:bg-slate-50"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-indigo-600 shadow-sm transition hover:bg-slate-50"
               >
                 <RefreshCw className={loading ? 'animate-spin' : ''} size={18} />
               </button>
