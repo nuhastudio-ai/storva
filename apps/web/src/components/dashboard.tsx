@@ -12,7 +12,7 @@ import {
   Trash2,
   HardDrive,
   Activity,
-  Settings,
+  Settings as SettingsIcon,
   FileText,
   Image as ImageIcon,
   Video,
@@ -28,6 +28,8 @@ import {
   LogIn,
   LogOut,
   User,
+  Menu,
+  X,
 } from 'lucide-react'
 
 const NAV_ITEMS = [
@@ -49,7 +51,7 @@ const CATEGORIES = [
 const SYSTEM = [
   { label: 'Storage', icon: HardDrive, path: '/settings/storage' },
   { label: 'Activity', icon: Activity, path: '/settings/activity' },
-  { label: 'Settings', icon: Settings, path: '/settings/connection' },
+  { label: 'Settings', icon: SettingsIcon, path: '/settings/connection' },
 ]
 
 function formatBytes(bytes: number = 0) {
@@ -98,8 +100,70 @@ export function Sidebar() {
     window.location.reload()
   }
 
+  const [isMobileOpen, setIsMobileOpen] = useState(false)
+
   return (
     <>
+      {/* Mobile Header */}
+      <div className="md:hidden flex items-center justify-between p-4 bg-white/80 backdrop-blur-md sticky top-0 z-50 border-b border-slate-100">
+        <button onClick={() => setIsMobileOpen(true)} className="p-2 text-slate-600"><Menu size={20} /></button>
+        <div className="font-bold text-lg text-indigo-600">Storva</div>
+        {user ? (
+          <button onClick={handleSignOut} className="p-2 text-slate-600"><LogIn size={20} /></button>
+        ) : (
+          <Link href="/login" className="p-2 text-slate-600"><LogIn size={20} /></Link>
+        )}
+      </div>
+
+      {/* Mobile Sidebar Overlay */}
+      {isMobileOpen && (
+        <div className="md:hidden fixed inset-0 z-50 flex">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setIsMobileOpen(false)} />
+          <aside className="relative w-[280px] bg-indigo-600 p-6 text-indigo-100 flex flex-col">
+            <button onClick={() => setIsMobileOpen(false)} className="absolute top-4 right-4 p-2"><X /></button>
+            <div className="mb-12 text-center font-black text-2xl">Storva</div>
+            <nav className="flex-1 space-y-4">
+              {[
+                { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
+                { label: 'Files', icon: FolderOpen, path: '/files' },
+                { label: 'Recent', icon: Clock, path: '/recent' },
+                { label: 'Trash', icon: Trash2, path: '/trash' },
+              ].map((item) => (
+                <Link
+                  key={item.label}
+                  href={item.path}
+                  onClick={() => setIsMobileOpen(false)}
+                  className={`flex items-center gap-4 px-4 py-3 rounded-2xl transition-all ${
+                    pathname === item.path ? 'bg-white/10 text-white' : 'hover:bg-white/5 text-indigo-100/60'
+                  }`}
+                >
+                  <item.icon size={22} />
+                  <span className="font-semibold text-sm">{item.label}</span>
+                </Link>
+              ))}
+              {user?.role?.toLowerCase() === 'admin' && (
+                <>
+                  <div className="pt-3 text-[10px] font-semibold uppercase tracking-[0.24em] text-indigo-100/45">Settings</div>
+                  {SYSTEM.map((item) => (
+                    <Link
+                      key={item.label}
+                      href={item.path}
+                      onClick={() => setIsMobileOpen(false)}
+                      className={`flex items-center gap-4 px-4 py-3 rounded-2xl transition-all ${
+                        pathname === item.path ? 'bg-white/10 text-white' : 'hover:bg-white/5 text-indigo-100/60'
+                      }`}
+                    >
+                      <item.icon size={22} />
+                      <span className="font-semibold text-sm">{item.label}</span>
+                    </Link>
+                  ))}
+                </>
+              )}
+            </nav>
+          </aside>
+        </div>
+      )}
+
       {/* Desktop Sidebar */}
       <aside className="hidden md:flex w-[240px] flex-col bg-indigo-600 p-6 h-full text-indigo-100">
         <div className="mb-12 flex justify-center">
@@ -153,25 +217,6 @@ export function Sidebar() {
           </div>
         </div>
       </aside>
-
-      {/* Mobile Bottom Nav */}
-      <div className="md:hidden fixed bottom-6 left-6 right-6 z-50 flex items-center justify-around bg-white/90 backdrop-blur-xl border border-white/20 p-4 rounded-[2.5rem] shadow-2xl ring-1 ring-black/5">
-        {[
-          { label: 'Home', icon: LayoutDashboard, path: '/' },
-          { label: 'Files', icon: FolderOpen, path: '/files' },
-          { label: 'Settings', icon: Settings, path: '/settings' },
-        ].map((item) => (
-          <button
-            key={item.label}
-            onClick={() => router.push(item.path)}
-            className={`flex flex-col items-center transition-all ${
-              pathname === item.path ? 'text-indigo-600 scale-110' : 'text-slate-400'
-            }`}
-          >
-            <item.icon size={24} />
-          </button>
-        ))}
-      </div>
     </>
   )
 }
