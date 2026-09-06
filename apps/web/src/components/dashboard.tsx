@@ -28,6 +28,7 @@ import {
   LogIn,
   LogOut,
   User,
+  Users,
   Menu,
   X,
 } from 'lucide-react'
@@ -51,6 +52,7 @@ const CATEGORIES = [
 const SYSTEM = [
   { label: 'Storage', icon: HardDrive, path: '/settings/storage' },
   { label: 'Activity', icon: Activity, path: '/settings/activity' },
+  { label: 'Users', icon: Users, path: '/settings/users' },
   { label: 'Settings', icon: SettingsIcon, path: '/settings/connection' },
 ]
 
