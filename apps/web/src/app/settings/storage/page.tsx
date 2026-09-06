@@ -196,10 +196,10 @@ export default function StorageSettingsPage() {
         </div>
       )}
 
-      <div className="mx-auto grid min-h-[calc(100vh-1.5rem)] max-w-[1440px] gap-6 rounded-[2rem] border border-white/70 bg-white/70 p-3 shadow-[0_20px_80px_rgba(99,102,241,0.12)] backdrop-blur-xl md:grid-cols-[240px_1fr_320px] md:p-5">
+      <div className="mx-auto grid h-[1366px] w-[1440px] overflow-hidden gap-6 rounded-[2rem] border border-white/70 bg-white/70 p-3 shadow-[0_20px_80px_rgba(99,102,241,0.12)] backdrop-blur-xl md:grid-cols-[240px_1fr_320px] md:p-5">
         <Sidebar />
 
-        <section className="space-y-6">
+        <section className="min-h-0 space-y-6 overflow-y-auto pr-1">
           {/* Header */}
           <header className="flex items-center justify-between rounded-[1.5rem] bg-white p-6 shadow-sm ring-1 ring-slate-200/70">
             <div>
