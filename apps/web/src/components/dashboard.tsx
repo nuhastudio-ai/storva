@@ -445,6 +445,12 @@ export function RightPanel() {
   const [stats, setStats] = useState<any>(null)
   const [activities, setActivities] = useState<any[]>([])
   const { user, loading } = useAuth()
+  const router = useRouter()
+
+  const handleSignOut = async () => {
+    await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
+    router.push('/login')
+  }
 
   useEffect(() => {
     fetch('/api/storage/status')
