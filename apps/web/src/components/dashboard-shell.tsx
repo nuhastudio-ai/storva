@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { Sidebar, HeroCard, StorageCards, RecentFilesTable, FoldersCard, RightPanel } from './dashboard'
+import { useAuth } from '@/lib/auth'
 import { DevicePicker } from './device-picker'
 import { useDashboardData } from '@/lib/dashboard-data'
 import { useConnectionStatus } from '@/lib/useConnectionStatus'
@@ -40,22 +41,24 @@ export function DashboardShell() {
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-base font-semibold text-slate-800">Disk Space</h2>
-                  <p className="text-sm text-slate-500">{formatBytes(storage?.usedBytes)} used of {formatBytes(storage?.totalBytes)}</p>
+                  <p className="text-sm text-slate-500">{formatBytes((storage?.totalBytes || 0) - (storage?.usedBytes || 0))} free of {formatBytes(storage?.totalBytes)}</p>
                 </div>
                 <div className={`text-sm font-bold ${statusColor}`}>{status}</div>
               </div>
               <div className="mt-4 h-3 overflow-hidden rounded-full bg-slate-100">
                 <div className={`h-full rounded-full ${percentUsed >= 95 ? 'bg-rose-500' : percentUsed >= 85 ? 'bg-amber-500' : 'bg-emerald-500'}`} style={{ width: `${Math.min(percentUsed, 100)}%` }} />
               </div>
-              <div className="mt-2 text-right text-xs text-slate-400">{percentUsed}% used</div>
+              <div className="mt-2 text-right text-xs text-slate-400">{100 - percentUsed}% free</div>
             </div>
             <DevicePicker />
           </div>
           <StorageCards />
-          <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-            <RecentFilesTable />
-            <FoldersCard />
-          </div>
+          {user && (
+            <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+              <RecentFilesTable />
+              <FoldersCard />
+            </div>
+          )}
         </section>
         <RightPanel />
       </div>
