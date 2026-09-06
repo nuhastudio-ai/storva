@@ -502,7 +502,7 @@ export default function Login() {
             {/* Footer */}
             <div style={{ marginTop: '2rem', textAlign: 'center' }}>
               <p style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
-                © 2026 Storva · Your data, your control
+                © 2026 Storva · Created by: @lin.nuha_ (HASANA GRAFIKA)
               </p>
             </div>
           </div>
