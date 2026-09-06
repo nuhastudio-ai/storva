@@ -96,9 +96,8 @@ export function Sidebar() {
   const { user } = useAuth()
 
   const handleSignOut = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' })
-    router.refresh()
-    window.location.reload()
+    await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
+    router.push('/login')
   }
 
   const [isMobileOpen, setIsMobileOpen] = useState(false)
@@ -484,7 +483,7 @@ export function RightPanel() {
               </div>
             </div>
             <button
-              onClick={() => { fetch('/api/auth/logout', { method: 'POST' }); window.location.reload(); }}
+              onClick={handleSignOut}
               title="Sign Out"
               className="ml-2 flex items-center justify-center rounded-lg p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-500"
             >
