@@ -1,9 +1,21 @@
 import { repository } from '@/lib/repository'
 import { NextRequest, NextResponse } from 'next/server'
 
+const EXT_MIME: Record<string, string> = {
+  '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml',
+  '.pdf': 'application/pdf', '.txt': 'text/plain', '.csv': 'text/csv', '.json': 'application/json',
+  '.mp4': 'video/mp4', '.webm': 'video/webm', '.mov': 'video/quicktime',
+  '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.ogg': 'audio/ogg', '.flac': 'audio/flac',
+}
+function effectiveMime(file: any) {
+  const current = String(file.mimeType || '')
+  if (current && current !== 'application/octet-stream') return current
+  const name = String(file.name || file.relativePath || '')
+  return EXT_MIME[name.slice(name.lastIndexOf('.')).toLowerCase()] || current || 'application/octet-stream'
+}
 function getCategory(file: any) {
   if (file.isFolder) return 'folder'
-  const mime = file.mimeType || ''
+  const mime = effectiveMime(file)
   if (mime.startsWith('image/')) return 'images'
   if (mime.startsWith('video/')) return 'videos'
   if (mime.startsWith('audio/')) return 'audio'
@@ -29,7 +41,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
       name: file.name,
       isFolder: file.isFolder,
       relativePath: file.relativePath,
-      mimeType: file.mimeType,
+      mimeType: effectiveMime(file),
       category: getCategory(file),
       size: file.size.toString(),
       accessType: share.accessType,

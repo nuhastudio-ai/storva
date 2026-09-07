@@ -4,8 +4,23 @@ import { prisma } from '@/lib/prisma'
 import { randomBytes } from 'node:crypto'
 import { networkInterfaces } from 'node:os'
 import { NextRequest, NextResponse } from 'next/server'
+import { signAgentToken } from '@storva/shared-auth'
 
 const AGENT_URL = process.env.STORVA_AGENT_URL || 'http://127.0.0.1:5125'
+
+const EXT_MIME: Record<string, string> = {
+  '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml',
+  '.pdf': 'application/pdf', '.txt': 'text/plain', '.csv': 'text/csv', '.json': 'application/json',
+  '.mp4': 'video/mp4', '.webm': 'video/webm', '.mov': 'video/quicktime',
+  '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.ogg': 'audio/ogg', '.flac': 'audio/flac',
+  '.doc': 'application/msword', '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  '.xls': 'application/vnd.ms-excel', '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  '.ppt': 'application/vnd.ms-powerpoint', '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+}
+function inferMime(name: string, isFolder?: boolean) {
+  if (isFolder) return 'inode/directory'
+  return EXT_MIME[name.slice(name.lastIndexOf('.')).toLowerCase()] || 'application/octet-stream'
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -105,7 +120,27 @@ export async function POST(req: NextRequest) {
     if (!file && relativePath) {
       const name = relativePath.split('/').filter(Boolean).pop() || relativePath
       const ext = isFolder ? '' : name.includes('.') ? name.slice(name.lastIndexOf('.') + 1) : ''
-      const mime = isFolder ? 'inode/directory' : 'application/octet-stream'
+      let mime = inferMime(name, Boolean(isFolder))
+
+      // Resolve actual metadata from the agent before falling back to extension inference.
+      // This matters for files that have not been synchronized into file_metadata yet.
+      if (!isFolder && mime === 'application/octet-stream') {
+        try {
+          const token = await signAgentToken(currentUser.id, device.id, ['storage:read'], 120)
+          const infoUrl = new URL('/info', AGENT_URL)
+          infoUrl.searchParams.set('path', relativePath)
+          if (normalizedVolumeId != null) infoUrl.searchParams.set('vol', String(normalizedVolumeId))
+          const infoRes = await fetch(infoUrl.toString(), {
+            headers: { Authorization: `Bearer ${token}` },
+            signal: AbortSignal.timeout(5_000),
+            cache: 'no-store',
+          })
+          if (infoRes.ok) {
+            const info = await infoRes.json()
+            if (typeof info.mimeType === 'string' && info.mimeType) mime = info.mimeType
+          }
+        } catch { /* extension fallback is sufficient */ }
+      }
 
       file = await repository.fileMetadata.create({
         data: {

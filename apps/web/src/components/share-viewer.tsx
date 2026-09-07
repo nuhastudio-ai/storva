@@ -50,6 +50,27 @@ function formatDate(value: string) {
   return new Date(value).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
+function effectiveMime(item: Pick<FileItem, 'mimeType' | 'name'>) {
+  const mime = String(item.mimeType || '')
+  if (mime && mime !== 'application/octet-stream') return mime
+  const ext = item.name.slice(item.name.lastIndexOf('.')).toLowerCase()
+  const map: Record<string, string> = {
+    '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml',
+    '.pdf': 'application/pdf', '.txt': 'text/plain', '.csv': 'text/csv', '.json': 'application/json',
+    '.mp4': 'video/mp4', '.webm': 'video/webm', '.mov': 'video/quicktime', '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.ogg': 'audio/ogg',
+  }
+  return map[ext] || mime
+}
+function effectiveCategory(item: Pick<FileItem, 'mimeType' | 'name' | 'category'>) {
+  if (item.category && item.category !== 'others') return item.category
+  const mime = effectiveMime(item)
+  if (mime.startsWith('image/')) return 'images'
+  if (mime.startsWith('video/')) return 'videos'
+  if (mime.startsWith('audio/')) return 'audio'
+  if (mime.startsWith('text/') || mime === 'application/json' || mime === 'application/pdf') return 'documents'
+  return item.category
+}
+
 function getItemIcon(item: Pick<FileItem, 'isFolder' | 'category'>, size = 22) {
   if (item.isFolder) return <Folder className="fill-amber-100 text-amber-500" size={size} />
   switch (item.category) {
@@ -304,10 +325,12 @@ export function ShareViewer({ share }: { share: any }) {
 }
 
 function FilePreview({ item, src, text }: { item: FileItem; src: string; text: string }) {
-  if (item.category === 'images') return <div className="flex min-h-[55vh] items-center justify-center"><img src={src} alt={item.name} className="max-h-[75vh] max-w-full rounded-xl object-contain shadow-sm" /></div>
-  if (item.mimeType === 'application/pdf' || item.name.toLowerCase().endsWith('.pdf')) return <div className="mx-auto min-h-[70vh] max-w-4xl overflow-hidden rounded-xl bg-white shadow-sm"><PdfViewer src={src} fileName={item.name} /></div>
-  if (item.category === 'videos') return <div className="flex min-h-[55vh] items-center justify-center"><video src={src} controls playsInline className="max-h-[72vh] max-w-full rounded-xl bg-black shadow-sm" /></div>
-  if (item.category === 'audio') return <div className="mx-auto flex min-h-[35vh] max-w-xl flex-col items-center justify-center rounded-2xl bg-white p-8 shadow-sm"><Music className="text-violet-500" size={48} /><p className="mt-4 text-base font-semibold text-slate-800">{item.name}</p><audio src={src} controls className="mt-6 w-full" /></div>
-  if (item.mimeType.startsWith('text/') || item.mimeType === 'application/json') return <pre className="mx-auto min-h-[55vh] max-w-4xl whitespace-pre-wrap rounded-2xl bg-white p-6 font-mono text-sm leading-6 text-slate-700 shadow-sm">{text || 'Memuat isi file...'}</pre>
+  const mimeType = effectiveMime(item)
+  const category = effectiveCategory(item)
+  if (category === 'images' || mimeType.startsWith('image/')) return <div className="flex min-h-[55vh] items-center justify-center"><img src={src} alt={item.name} className="max-h-[75vh] max-w-full rounded-xl object-contain shadow-sm" /></div>
+  if (mimeType === 'application/pdf' || item.name.toLowerCase().endsWith('.pdf')) return <div className="mx-auto min-h-[70vh] max-w-4xl overflow-hidden rounded-xl bg-white shadow-sm"><PdfViewer src={src} fileName={item.name} /></div>
+  if (category === 'videos' || mimeType.startsWith('video/')) return <div className="flex min-h-[55vh] items-center justify-center"><video src={src} controls playsInline className="max-h-[72vh] max-w-full rounded-xl bg-black shadow-sm" /></div>
+  if (category === 'audio' || mimeType.startsWith('audio/')) return <div className="mx-auto flex min-h-[35vh] max-w-xl flex-col items-center justify-center rounded-2xl bg-white p-8 shadow-sm"><Music className="text-violet-500" size={48} /><p className="mt-4 text-base font-semibold text-slate-800">{item.name}</p><audio src={src} controls className="mt-6 w-full" /></div>
+  if (mimeType.startsWith('text/') || mimeType === 'application/json' || mimeType === 'application/xml') return <pre className="mx-auto min-h-[55vh] max-w-4xl whitespace-pre-wrap rounded-2xl bg-white p-6 font-mono text-sm leading-6 text-slate-700 shadow-sm">{text || 'Memuat isi file...'}</pre>
   return <div className="mx-auto flex min-h-[45vh] max-w-xl flex-col items-center justify-center rounded-2xl bg-white p-8 text-center shadow-sm"><FileText className="text-blue-500" size={48} /><h3 className="mt-4 text-base font-semibold text-slate-800">{item.name}</h3><p className="mt-2 text-sm leading-6 text-slate-500">Format ini belum memiliki renderer bawaan browser. File tetap tersedia dalam mode read-only tanpa tombol download.</p></div>
 }
