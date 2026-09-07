@@ -36,36 +36,35 @@ class MockPrismaClient {
   }
 
   private createModel(modelName: string) {
+    const getCollection = () => {
+      if (!Array.isArray(this.data[modelName])) this.data[modelName] = []
+      return this.data[modelName] as any[]
+    }
+
     return {
       create: async ({ data }: any) => {
         const id = (crypto.randomUUID as () => string)()
         const newItem = { ...data, id, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
-        this.data[modelName].push(newItem)
+        getCollection().push(newItem)
         this.save()
         return newItem
       },
       findUnique: async ({ where }: any) => {
-        return this.data[modelName].find((i: any) => Object.entries(where).every(([k, v]) => i[k] === v)) || null
+        return getCollection().find((i: any) => Object.entries(where || {}).every(([k, v]) => i[k] === v)) || null
       },
       findFirst: async ({ where, include }: any) => {
-        const item = this.data[modelName].find((i: any) => Object.entries(where || {}).every(([k, v]) => i[k] === v))
+        const item = getCollection().find((i: any) => Object.entries(where || {}).every(([k, v]) => i[k] === v))
         if (!item) return null
-        // Simplistic include mock
         if (include) {
           const result: any = { ...item }
-          for (const [rel, _] of Object.entries(include)) {
-            // This is a very basic mock of relations
-            result[rel] = []
-          }
+          for (const [rel] of Object.entries(include)) result[rel] = []
           return result
         }
         return item
       },
       findMany: async ({ where, orderBy, take, skip, include }: any) => {
-        let items = [...this.data[modelName]]
-        if (where) {
-          items = items.filter((i: any) => Object.entries(where).every(([k, v]) => i[k] === v))
-        }
+        let items = [...getCollection()]
+        if (where) items = items.filter((i: any) => Object.entries(where).every(([k, v]) => i[k] === v))
         if (orderBy) {
           const [key, direction] = Object.entries(orderBy)[0] as [string, string]
           items.sort((a: any, b: any) => {
@@ -80,11 +79,11 @@ class MockPrismaClient {
           items = items.map((item: any) => {
             const result = { ...item }
             if (include.user && modelName === 'activities') {
-              const user = this.data.users.find((u: any) => u.id === item.userId)
+              const user = this.data.users?.find((u: any) => u.id === item.userId)
               result.user = user ? { username: user.username } : null
             }
             if (include.file && modelName === 'activities') {
-              const file = this.data.file_metadata.find((f: any) => f.id === item.fileId)
+              const file = this.data.file_metadata?.find((f: any) => f.id === item.fileId)
               result.file = file ? { name: file.name, relativePath: file.relativePath, isFolder: file.isFolder } : null
             }
             return result
@@ -93,17 +92,19 @@ class MockPrismaClient {
         return items
       },
       update: async ({ where, data }: any) => {
-        const idx = this.data[modelName].findIndex((i: any) => Object.entries(where).every(([k, v]) => i[k] === v))
+        const collection = getCollection()
+        const idx = collection.findIndex((i: any) => Object.entries(where || {}).every(([k, v]) => i[k] === v))
         if (idx === -1) throw new Error('Record not found')
-        this.data[modelName][idx] = { ...this.data[modelName][idx], ...data, updatedAt: new Date().toISOString() }
+        collection[idx] = { ...collection[idx], ...data, updatedAt: new Date().toISOString() }
         this.save()
-        return this.data[modelName][idx]
+        return collection[idx]
       },
-      count: async () => this.data[modelName].length,
+      count: async () => getCollection().length,
       delete: async ({ where }: any) => {
-        const idx = this.data[modelName].findIndex((i: any) => Object.entries(where).every(([k, v]) => i[k] === v))
+        const collection = getCollection()
+        const idx = collection.findIndex((i: any) => Object.entries(where || {}).every(([k, v]) => i[k] === v))
         if (idx === -1) throw new Error('Record not found')
-        const deleted = this.data[modelName].splice(idx, 1)[0]
+        const deleted = collection.splice(idx, 1)[0]
         this.save()
         return deleted
       }
