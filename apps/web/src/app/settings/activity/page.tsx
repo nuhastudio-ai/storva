@@ -1,7 +1,7 @@
 'use client'
 
 import { Sidebar, RightPanel } from '@/components/dashboard'
-import { Activity as ActivityIcon, FileText, FolderOpen, Upload, Trash2, Share2, RefreshCw, Download } from 'lucide-react'
+import { Activity as ActivityIcon, FileText, FolderOpen, Upload, Trash2, Share2, RefreshCw, Download, LockKeyhole, UnlockKeyhole } from 'lucide-react'
 import { useState, useEffect } from 'react'
 
 type Activity = {
@@ -23,7 +23,9 @@ function actionLabel(action: string) {
     case 'file:delete':   return { label: 'Deleted file', color: 'text-rose-600 bg-rose-50', icon: Trash2 }
     case 'file:upload':   return { label: 'Uploaded file', color: 'text-emerald-600 bg-emerald-50', icon: Upload }
     case 'file:download': return { label: 'Downloaded file', color: 'text-cyan-600 bg-cyan-50', icon: Download }
-    case 'share:create':  return { label: 'Shared file', color: 'text-violet-600 bg-violet-50', icon: Share2 }
+    case 'share:create':      return { label: 'Shared file', color: 'text-violet-600 bg-violet-50', icon: Share2 }
+    case 'privacy:enable':   return { label: 'Made private', color: 'text-indigo-600 bg-indigo-50', icon: LockKeyhole }
+    case 'privacy:disable':  return { label: 'Removed privacy', color: 'text-slate-600 bg-slate-100', icon: UnlockKeyhole }
     default:              return { label: action, color: 'text-slate-600 bg-slate-50', icon: ActivityIcon }
   }
 }

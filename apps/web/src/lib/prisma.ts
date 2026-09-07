@@ -6,7 +6,7 @@ import path from 'node:path'
 // ponytail: This is a minimal mock for Prisma to allow development without a real DB.
 // In production, this path is never reached because DATABASE_URL is set.
 class MockPrismaClient {
-  private dbPath = path.join(process.cwd(), 'dev-db.json')
+  private dbPath = process.env.STORVA_DEV_DB_PATH || path.join(process.cwd(), '.storva-data', 'dev-db.json')
   private data: any = {
     users: [],
     sessions: [],
@@ -20,9 +20,11 @@ class MockPrismaClient {
   }
 
   constructor() {
-    if (fs.existsSync(this.dbPath)) {
+    const legacyDbPath = path.join(process.cwd(), 'dev-db.json')
+    const sourceDbPath = fs.existsSync(this.dbPath) ? this.dbPath : (fs.existsSync(legacyDbPath) ? legacyDbPath : null)
+    if (sourceDbPath) {
       try {
-        const loaded = JSON.parse(fs.readFileSync(this.dbPath, 'utf8'))
+        const loaded = JSON.parse(fs.readFileSync(sourceDbPath, 'utf8'))
         // Merge: keep defaults for any key not yet in the saved file
         this.data = { ...this.data, ...loaded }
         if (Array.isArray(this.data.file_metadata)) {
@@ -31,7 +33,8 @@ class MockPrismaClient {
             size: typeof f.size === 'string' && /^\d+$/.test(f.size) ? BigInt(f.size) : f.size,
           }))
         }
-
+        // Migrate the legacy in-source dev DB to the persistent data directory.
+        if (sourceDbPath !== this.dbPath && Object.values(this.data).some((value: any) => Array.isArray(value) && value.length > 0)) this.save()
       } catch (e) {
         console.warn('Failed to load dev-db.json, starting fresh')
       }
@@ -39,6 +42,7 @@ class MockPrismaClient {
   }
 
   private save() {
+    fs.mkdirSync(path.dirname(this.dbPath), { recursive: true })
     // JSON.stringify() throws on BigInt values (FileMetadata.size uses BigInt
     // in the real Prisma schema). Store BigInt as its exact decimal string in
     // the development JSON database so share creation and other writes work

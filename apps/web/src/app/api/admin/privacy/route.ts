@@ -58,6 +58,30 @@ export async function POST(req: Request) {
       })
     }
 
+    // Keep privacy changes visible in Activity Log. Link the activity to the
+    // matching metadata record when available so the UI can resolve its name.
+    try {
+      const file = await repository.fileMetadata.findFirst({ where: { relativePath: path } })
+      await repository.activity.create({
+        data: {
+          userId: user.id,
+          action: isPrivate ? 'privacy:enable' : 'privacy:disable',
+          fileId: file?.id ?? null,
+          metadata: JSON.stringify({
+            relativePath: path,
+            path,
+            isPrivate,
+            userIds,
+            fileName: file?.name || path.split('/').pop() || path,
+            isFolder: Boolean(file?.isFolder),
+          }),
+        },
+      })
+    } catch (activityErr) {
+      // Activity logging is best-effort and must never make privacy changes fail.
+      console.warn('[POST /api/admin/privacy] Activity log failed:', activityErr)
+    }
+
     return NextResponse.json({ success: true, isPrivate, userIds })
   } catch (err) {
     console.error('[POST /api/admin/privacy] Error:', err)
