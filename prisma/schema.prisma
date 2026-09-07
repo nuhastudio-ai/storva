@@ -122,6 +122,7 @@ model ShareLink {
   expiresAt     DateTime? @map("expires_at")
   createdAt     DateTime @default(now()) @map("created_at")
   readOnly      Boolean   @default(true) @map("read_only")
+  accessType    String    @default("PUBLIC") @map("access_type")
 
   @@map("share_links")
 }
