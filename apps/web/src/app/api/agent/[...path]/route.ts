@@ -3,6 +3,43 @@ import { getCurrentUser } from '@/lib/authUtils'
 import { signAgentToken } from '@storva/shared-auth'
 import { NextRequest, NextResponse } from 'next/server'
 
+// ── Privacy helpers ───────────────────────────────────────────────────────────
+function normalizePath(value: string) {
+  return value.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '')
+}
+
+async function getPrivacyDecisions(userId: string | null) {
+  let isAdmin = false
+  if (userId) {
+    const u: any = await repository.user.findUnique({ where: { id: userId } }).catch(() => null)
+    isAdmin = u?.role?.toLowerCase() === 'admin'
+  }
+  const rules: any[] = await repository.privacyRule.findMany({}).catch(() => [])
+  return { isAdmin, rules }
+}
+
+function isPathHidden(targetPath: string, userId: string | null, isAdmin: boolean, rules: any[]) {
+  if (isAdmin) return false
+  const target = normalizePath(targetPath)
+  if (!target) return false
+
+  // Sort by specificity: deepest path rule wins, otherwise any ancestor privacy applies
+  const matchedRules = rules
+    .filter((r) => {
+      const rulePath = normalizePath(r.relativePath)
+      return target === rulePath || target.startsWith(`${rulePath}/`)
+    })
+    .sort((a, b) => normalizePath(b.relativePath).length - normalizePath(a.relativePath).length)
+
+  if (matchedRules.length === 0) return false
+  const rule = matchedRules[0]
+  if (!rule.isPrivate) return false
+  if (!userId) return true
+
+  const allowed: string[] = JSON.parse(rule.allowedUsers || '[]')
+  return !allowed.includes(userId)
+}
+
 // Timeout per request type (ms).
 // - LONG: uploads, downloads, chunked transfers — may take minutes
 // - SHORT: everything else (list, rename, delete, volumes, stats, health)
@@ -135,16 +172,50 @@ async function proxy(req: NextRequest, params: { path: string[] }) {
 
     // ── Record file download ─────────────────────────────────────────────────
     if (actionKey === 'download' && res.ok && req.method === 'GET') {
+      const dlPath = req.nextUrl.searchParams.get('path') ?? ''
+      const { isAdmin, rules } = await getPrivacyDecisions(currentUser?.id ?? null)
+      if (isPathHidden(dlPath, currentUser?.id ?? null, isAdmin, rules)) {
+        return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+      }
       try {
-        const filePath = req.nextUrl.searchParams.get('path') ?? ''
         await repository.activity.create({
           data: {
             userId,
             action: 'file:download',
-            metadata: JSON.stringify({ filePath, path: params.path }),
+            metadata: JSON.stringify({ filePath: dlPath, path: params.path }),
           },
         })
       } catch { /* swallow */ }
+    }
+
+    // ── Block preview of private files ──────────────────────────────────────
+    if ((actionKey === 'preview' || actionKey === 'thumbnail') && res.ok && req.method === 'GET') {
+      const pvPath = req.nextUrl.searchParams.get('path') ?? ''
+      const { isAdmin, rules } = await getPrivacyDecisions(currentUser?.id ?? null)
+      if (isPathHidden(pvPath, currentUser?.id ?? null, isAdmin, rules)) {
+        return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+      }
+    }
+
+    // ── Filter file listing for private items ────────────────────────────────
+    if (actionKey === 'files' && res.ok && req.method === 'GET') {
+      const { isAdmin, rules } = await getPrivacyDecisions(currentUser?.id ?? null)
+      try {
+        const data = await res.json()
+        if (Array.isArray(data?.items)) {
+          data.items = data.items
+            .filter((item: any) => !isPathHidden(item.relativePath, currentUser?.id ?? null, isAdmin, rules))
+            .map((item: any) => {
+              if (!isAdmin) return item
+              const target = normalizePath(item.relativePath)
+              const matching = rules
+                .filter((rule) => target === normalizePath(rule.relativePath) || target.startsWith(`${normalizePath(rule.relativePath)}/`))
+                .sort((a, b) => normalizePath(b.relativePath).length - normalizePath(a.relativePath).length)[0]
+              return { ...item, isPrivate: Boolean(matching?.isPrivate) }
+            })
+        }
+        return NextResponse.json(data)
+      } catch { /* fall through */ }
     }
 
     const response = new NextResponse(res.body, {

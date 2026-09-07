@@ -12,7 +12,7 @@ import {
   List as ListIcon, ChevronRight, Download, Trash2, Edit2,
   FileText, Image as ImageIcon, Video, Music, Archive, File,
   X, Eye, RefreshCw, CheckCircle, AlertCircle, ArrowUpDown,
-  HardDrive, ChevronDown, ArrowLeft,
+  HardDrive, ChevronDown, ArrowLeft, Lock, Unlock,
 } from 'lucide-react'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -26,6 +26,7 @@ type FileItem = {
   extension: string
   modifiedAt: string
   createdAt: string
+  isPrivate?: boolean
 }
 
 type Volume = {
@@ -193,6 +194,13 @@ function FilesContent() {
   const [deletingItem, setDeletingItem] = useState<FileItem | null>(null)
   const [previewItem, setPreviewItem] = useState<FileItem | null>(null)
 
+  // Privacy
+  const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false)
+  const [privacyItem, setPrivacyItem] = useState<FileItem | null>(null)
+  const [privacyUsers, setPrivacyUsers] = useState<string[]>([])
+  const [availableUsers, setAvailableUsers] = useState<Array<{ id: string; username: string }>>([])
+  const [privacyEnabled, setPrivacyEnabled] = useState(false)
+
   // Upload
   const [isUploading, setIsUploading] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
@@ -202,6 +210,40 @@ function FilesContent() {
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type })
     setTimeout(() => setToast(null), 3500)
+  }
+
+  useEffect(() => {
+    if (user?.role?.toLowerCase() !== 'admin') return
+    fetch('/api/admin/users').then((r) => r.ok ? r.json() : null).then((data) => {
+      if (data?.users) setAvailableUsers(data.users.filter((u: any) => u.role?.toLowerCase() !== 'admin'))
+    }).catch(() => {})
+  }, [user])
+
+  const openPrivacy = async (item: FileItem) => {
+    setPrivacyItem(item)
+    setPrivacyUsers([])
+    setPrivacyEnabled(Boolean(item.isPrivate))
+    setIsPrivacyModalOpen(true)
+    try {
+      const res = await fetch(`/api/admin/privacy?path=${encodeURIComponent(item.relativePath)}`)
+      const data = await res.json()
+      setPrivacyEnabled(Boolean(data.isPrivate))
+      setPrivacyUsers(Array.isArray(data.userIds) ? data.userIds : [])
+    } catch { showToast('Unable to load privacy settings', 'error') }
+  }
+
+  const savePrivacy = async () => {
+    if (!privacyItem) return
+    try {
+      const res = await fetch('/api/admin/privacy', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: privacyItem.relativePath, isPrivate: privacyEnabled, userIds: privacyUsers }),
+      })
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Failed to save privacy')
+      showToast(privacyEnabled ? 'Private access updated' : 'Privacy removed')
+      setIsPrivacyModalOpen(false)
+      loadFiles()
+    } catch (err: any) { showToast(err.message, 'error') }
   }
 
 
@@ -613,6 +655,15 @@ function FilesContent() {
                             <Download size={14} />
                           </a>
                         )}
+                        {user?.role?.toLowerCase() === 'admin' && (
+                          <button
+                            onClick={() => openPrivacy(item)}
+                            title="Private access"
+                            className={`rounded-lg p-1.5 hover:bg-indigo-50 ${item.isPrivate ? 'text-indigo-600' : 'text-slate-400 hover:text-indigo-600'}`}
+                          >
+                            <Lock size={14} />
+                          </button>
+                        )}
                         {user && (
                           <button
                             onClick={() => { setRenamingItem(item); setNewName(item.name) }}
@@ -685,6 +736,11 @@ function FilesContent() {
                                   <Download size={15} />
                                 </a>
                               </>
+                            )}
+                            {user?.role?.toLowerCase() === 'admin' && (
+                              <button onClick={() => openPrivacy(item)} title="Private access" className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-indigo-600">
+                                <Lock size={15} />
+                              </button>
                             )}
                             {user && (
                               <button onClick={() => { setRenamingItem(item); setNewName(item.name) }} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-indigo-600"><Edit2 size={15} /></button>
@@ -767,6 +823,36 @@ function FilesContent() {
             <div className="mt-6 flex justify-end gap-2">
               <button onClick={() => setDeletingItem(null)} className="rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-100">Cancel</button>
               <button onClick={handleDelete} className="rounded-xl bg-rose-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-rose-700">Move to Trash</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PRIVACY MODAL */}
+      {isPrivacyModalOpen && privacyItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-[1.75rem] bg-white p-6 shadow-2xl ring-1 ring-slate-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2"><Lock className="text-indigo-600" size={22} /><h3 className="text-lg font-bold text-slate-800">Private access</h3></div>
+              <button onClick={() => setIsPrivacyModalOpen(false)} className="rounded-full p-1 text-slate-400 hover:bg-slate-100"><X size={18} /></button>
+            </div>
+            <p className="mt-2 truncate text-xs text-slate-500">{privacyItem.relativePath}</p>
+            <label className="mt-5 flex items-center gap-3 rounded-xl bg-slate-50 p-3 text-sm font-semibold text-slate-700">
+              <input type="checkbox" checked={privacyEnabled} onChange={(e) => setPrivacyEnabled(e.target.checked)} className="h-4 w-4 accent-indigo-600" />
+              Make this {privacyItem.isFolder ? 'folder and all children' : 'file'} private
+            </label>
+            {privacyEnabled && <div className="mt-4 space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Allowed users</p>
+              {availableUsers.length === 0 ? <p className="text-sm text-slate-400">No user accounts available.</p> : availableUsers.map((candidate) => (
+                <label key={candidate.id} className="flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-slate-50">
+                  <input type="checkbox" checked={privacyUsers.includes(candidate.id)} onChange={() => setPrivacyUsers((current) => current.includes(candidate.id) ? current.filter((id) => id !== candidate.id) : [...current, candidate.id])} className="h-4 w-4 accent-indigo-600" />
+                  <span className="text-sm text-slate-700">{candidate.username}</span>
+                </label>
+              ))}
+            </div>}
+            <div className="mt-6 flex justify-end gap-2">
+              <button onClick={() => setIsPrivacyModalOpen(false)} className="rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-100">Cancel</button>
+              <button onClick={savePrivacy} className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700">Save</button>
             </div>
           </div>
         </div>

@@ -10,6 +10,7 @@ export const repository = {
   uploadSession: prisma.uploadSession,
   downloadSession: prisma.downloadSession,
   shareLink: prisma.shareLink,
+  privacyRule: prisma.privacyRule,
 }
 
 export type Repository = typeof repository

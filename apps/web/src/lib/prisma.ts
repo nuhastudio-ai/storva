@@ -16,6 +16,7 @@ class MockPrismaClient {
     upload_sessions: [],
     download_sessions: [],
     share_links: [],
+    privacy_rules: [],
   }
 
   constructor() {
@@ -115,6 +116,7 @@ class MockPrismaClient {
   get uploadSession() { return this.createModel('upload_sessions') }
   get downloadSession() { return this.createModel('download_sessions') }
   get shareLink() { return this.createModel('share_links') }
+  get privacyRule() { return this.createModel('privacy_rules') }
 }
 
 const globalForPrisma = globalThis as unknown as { prisma: any }
