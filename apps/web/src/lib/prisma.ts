@@ -32,7 +32,16 @@ class MockPrismaClient {
   }
 
   private save() {
-    fs.writeFileSync(this.dbPath, JSON.stringify(this.data, null, 2))
+    // JSON.stringify() throws on BigInt values (FileMetadata.size uses BigInt
+    // in the real Prisma schema). Store BigInt as its exact decimal string in
+    // the development JSON database so share creation and other writes work
+    // with the mock database too.
+    const serialized = JSON.stringify(
+      this.data,
+      (_key, value) => (typeof value === 'bigint' ? value.toString() : value),
+      2,
+    )
+    fs.writeFileSync(this.dbPath, serialized)
   }
 
   private createModel(modelName: string) {

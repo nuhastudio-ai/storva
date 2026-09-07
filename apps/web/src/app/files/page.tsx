@@ -51,6 +51,31 @@ function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
+async function copyTextToClipboard(text: string) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text)
+    return
+  }
+
+  // Clipboard API is unavailable on some HTTP/LAN origins. Use the legacy
+  // textarea fallback so copying still works in local NAS deployments.
+  const textarea = document.createElement('textarea')
+  textarea.value = text
+  textarea.setAttribute('readonly', '')
+  textarea.style.position = 'fixed'
+  textarea.style.opacity = '0'
+  textarea.style.pointerEvents = 'none'
+  document.body.appendChild(textarea)
+  textarea.select()
+  textarea.setSelectionRange(0, textarea.value.length)
+
+  try {
+    if (!document.execCommand('copy')) throw new Error('Copy command rejected')
+  } finally {
+    document.body.removeChild(textarea)
+  }
+}
+
 function getItemIcon(item: FileItem, size = 24) {
   if (item.isFolder) return <Folder className="text-amber-500 fill-amber-100" size={size} />
   switch (item.category) {
@@ -269,9 +294,13 @@ function FilesContent() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Gagal membuat share link')
       setGeneratedShareUrl(data.shareUrl)
-      if (navigator.clipboard) {
-        await navigator.clipboard.writeText(data.shareUrl)
+      try {
+        await copyTextToClipboard(data.shareUrl)
         showToast('Link tersalin ke clipboard!')
+      } catch {
+        // The share was created successfully even when clipboard permission is
+        // blocked (for example on insecure origins or by browser policy).
+        showToast('Link berhasil dibuat. Salin link dari kolom di bawah.', 'success')
       }
     } catch (err: any) {
       showToast(err.message, 'error')
@@ -981,8 +1010,12 @@ function FilesContent() {
                   />
                   <button
                     onClick={async () => {
-                      await navigator.clipboard.writeText(generatedShareUrl)
-                      showToast('Link tersalin!')
+                      try {
+                        await copyTextToClipboard(generatedShareUrl)
+                        showToast('Link tersalin!')
+                      } catch {
+                        showToast('Browser memblokir clipboard. Salin link secara manual dari kolom.')
+                      }
                     }}
                     className="flex shrink-0 items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700"
                   >
