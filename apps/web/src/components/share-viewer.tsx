@@ -7,7 +7,7 @@ import PdfViewer from '@/components/PdfViewer'
 import PhotoSwipeLightbox from 'photoswipe/lightbox'
 import 'photoswipe/style.css'
 import {
-  AlertTriangle, ArrowLeft, ChevronRight, Eye, File, FileText, Folder, Grid, Image as ImageIcon,
+  AlertTriangle, ArrowLeft, ChevronRight, Download, Eye, File, FileText, Folder, Grid, Image as ImageIcon,
   List as ListIcon, Lock, Music, ShieldAlert, Video, X
 } from 'lucide-react'
 
@@ -167,7 +167,7 @@ export function ShareViewer({ share }: { share: any }) {
     return `/api/share/${share.token}/content?${qs.toString()}`
   }, [data, previewItem, share.token])
 
-  const openImageViewer = useCallback((targetItem: FileItem) => {
+  const openImageViewer = useCallback(async (targetItem: FileItem) => {
     const directItem: FileItem = {
       name: data?.name || '',
       relativePath: data?.relativePath || '',
@@ -183,15 +183,17 @@ export function ShareViewer({ share }: { share: any }) {
       ? items.filter((item) => !item.isFolder && effectiveCategory(item) === 'images')
       : [directItem]
     const startIndex = Math.max(0, galleryItems.findIndex((item) => item.relativePath === targetItem.relativePath))
-    const dataSource = galleryItems.map((item) => ({
-      src: (() => {
-        const qs = new URLSearchParams({ path: item.relativePath, mode: 'preview' })
-        if (data?.volumeId != null) qs.set('vol', String(data.volumeId))
-        return `/api/share/${share.token}/content?${qs.toString()}`
-      })(),
-      w: 1600,
-      h: 1200,
-      alt: item.name,
+    const dataSource = await Promise.all(galleryItems.map(async (item) => {
+      const qs = new URLSearchParams({ path: item.relativePath, mode: 'preview' })
+      if (data?.volumeId != null) qs.set('vol', String(data.volumeId))
+      const src = `/api/share/${share.token}/content?${qs.toString()}`
+      const dimensions = await new Promise<{ w: number; h: number }>((resolve) => {
+        const image = new Image()
+        image.onload = () => resolve({ w: image.naturalWidth || 1, h: image.naturalHeight || 1 })
+        image.onerror = () => resolve({ w: 1, h: 1 })
+        image.src = src
+      })
+      return { src, w: dimensions.w, h: dimensions.h, alt: item.name }
     }))
     if (!dataSource.length) return
 
@@ -199,30 +201,8 @@ export function ShareViewer({ share }: { share: any }) {
       dataSource,
       pswpModule: () => import('photoswipe'),
     })
-    lightbox.on('uiRegister', () => {
-      lightbox.pswp?.ui.registerElement({
-        name: 'download-button',
-        order: 8,
-        isButton: true,
-        tagName: 'a',
-        ariaLabel: 'Download image',
-        title: 'Download image',
-        html: '<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4\"/><polyline points=\"7 10 12 15 17 10\"/><line x1=\"12\" x2=\"12\" y1=\"15\" y2=\"3\"/></svg>',
-        onInit: (el) => {
-          const sync = () => {
-            const index = lightbox.pswp?.currIndex ?? 0
-            const current = galleryItems[index]
-            if (!current) return
-            el.setAttribute('href', addDownloadUrl(current))
-            el.setAttribute('download', current.name)
-          }
-          sync()
-          lightbox.pswp?.on('change', sync)
-        },
-      })
-    })
     lightbox.init()
-    lightbox.loadAndOpen(startIndex)
+    lightbox.loadAndOpen(startIndex >= 0 ? startIndex : 0)
   }, [addDownloadUrl, data, items, share.token])
 
   useEffect(() => {
@@ -323,7 +303,20 @@ export function ShareViewer({ share }: { share: any }) {
                 <span className="truncate">{data.name}</span>
               </div>
               <h1 className="mt-1 truncate text-2xl font-bold tracking-tight text-slate-800">{data.isFolder ? 'Shared Folder' : 'Shared File'}</h1>
-              <p className="mt-1 text-sm text-slate-500">Read-only viewer • {data.accessType === 'PUBLIC' ? 'Public link' : 'Authorized user'}</p>
+              <div className="mt-2 flex items-center gap-2">
+                <p className="text-sm text-slate-500">Read-only viewer • {data.accessType === 'PUBLIC' ? 'Public link' : 'Authorized user'}</p>
+                {!data.isFolder && (effectiveCategory({ mimeType: data.mimeType, name: data.name, category: data.category }) === 'images' || effectiveMime({ mimeType: data.mimeType, name: data.name }).startsWith('image/')) && (
+                  <a
+                    href={addDownloadUrl({ relativePath: data.relativePath, name: data.name })}
+                    download={data.name}
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 shadow-sm transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-600"
+                    title="Download image"
+                  >
+                    <Download size={14} />
+                    Download
+                  </a>
+                )}
+              </div>
             </div>
             {data.isFolder && (
               <div className="flex shrink-0 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
