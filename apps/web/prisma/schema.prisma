@@ -27,6 +27,7 @@ model User {
 model ShareLink {
   id            String        @id @default(uuid())
   fileId        String        @map("file_id")
+  volumeId      Int?          @map("volume_id")
   token         String        @unique
   accessType    String        @default("PUBLIC") @map("access_type") // PUBLIC, USER
   passwordHash  String?       @map("password_hash")

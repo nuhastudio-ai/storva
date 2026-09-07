@@ -289,6 +289,7 @@ function FilesContent() {
           password: shareWithPasskey ? sharePasskey : null,
           relativePath: shareItem.relativePath,
           isFolder: shareItem.isFolder,
+          volumeId: activeVol?.id ?? null,
         }),
       })
       const data = await res.json()

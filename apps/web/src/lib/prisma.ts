@@ -25,6 +25,13 @@ class MockPrismaClient {
         const loaded = JSON.parse(fs.readFileSync(this.dbPath, 'utf8'))
         // Merge: keep defaults for any key not yet in the saved file
         this.data = { ...this.data, ...loaded }
+        if (Array.isArray(this.data.file_metadata)) {
+          this.data.file_metadata = this.data.file_metadata.map((f: any) => ({
+            ...f,
+            size: typeof f.size === 'string' && /^\d+$/.test(f.size) ? BigInt(f.size) : f.size,
+          }))
+        }
+
       } catch (e) {
         console.warn('Failed to load dev-db.json, starting fresh')
       }

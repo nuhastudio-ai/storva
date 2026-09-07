@@ -77,7 +77,7 @@ async function recordActivity(userId: string, fileId: string) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { fileId, relativePath, expiresAt, password, readOnly, accessType, isFolder } = body
+    const { fileId, relativePath, expiresAt, password, readOnly, accessType, isFolder, volumeId } = body
 
     if (!fileId && !relativePath) {
       return NextResponse.json({ error: 'fileId or relativePath required' }, { status: 400 })
@@ -92,6 +92,8 @@ export async function POST(req: NextRequest) {
     }
 
     const device = await getOrAutoRegisterDevice(currentUser.id)
+
+    const normalizedVolumeId = Number.isInteger(Number(volumeId)) ? Number(volumeId) : null
 
     // Resolve existing FileMetadata or auto-create a minimal record
     let file = relativePath
@@ -127,6 +129,7 @@ export async function POST(req: NextRequest) {
     await prisma.shareLink.create({
       data: {
         fileId: file.id,
+        volumeId: normalizedVolumeId,
         token,
         passwordHash: password ?? null,
         expiresAt: expiresAt ? new Date(expiresAt) : null,
