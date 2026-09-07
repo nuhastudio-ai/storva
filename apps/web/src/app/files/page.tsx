@@ -12,7 +12,7 @@ import {
   List as ListIcon, ChevronRight, Download, Trash2, Edit2,
   FileText, Image as ImageIcon, Video, Music, Archive, File,
   X, Eye, RefreshCw, CheckCircle, AlertCircle, ArrowUpDown,
-  HardDrive, ChevronDown, ArrowLeft, Lock, Unlock,
+  HardDrive, ChevronDown, ArrowLeft, Lock, Unlock, Share2, Copy
 } from 'lucide-react'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -201,6 +201,15 @@ function FilesContent() {
   const [availableUsers, setAvailableUsers] = useState<Array<{ id: string; username: string }>>([])
   const [privacyEnabled, setPrivacyEnabled] = useState(false)
 
+  // Share Modal
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false)
+  const [shareItem, setShareItem] = useState<FileItem | null>(null)
+  const [shareAccessType, setShareAccessType] = useState<'PUBLIC' | 'USER'>('PUBLIC')
+  const [shareWithPasskey, setShareWithPasskey] = useState(false)
+  const [sharePasskey, setSharePasskey] = useState('')
+  const [generatedShareUrl, setGeneratedShareUrl] = useState('')
+  const [isSharing, setIsSharing] = useState(false)
+
   // Upload
   const [isUploading, setIsUploading] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
@@ -230,6 +239,45 @@ function FilesContent() {
       setPrivacyEnabled(Boolean(data.isPrivate))
       setPrivacyUsers(Array.isArray(data.userIds) ? data.userIds : [])
     } catch { showToast('Unable to load privacy settings', 'error') }
+  }
+
+  const openShareModal = (item: FileItem) => {
+    setShareItem(item)
+    setShareAccessType('PUBLIC')
+    setShareWithPasskey(false)
+    setSharePasskey('')
+    setGeneratedShareUrl('')
+    setIsShareModalOpen(true)
+  }
+
+  const handleGenerateShareLink = async () => {
+    if (!shareItem) return
+    setIsSharing(true)
+    try {
+      // Dapatkan fileId via API metadata atau buat session
+      const res = await fetch('/api/share/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileId: shareItem.relativePath, // handler fallback ke path jika id belum terpetakan
+          accessType: shareAccessType,
+          password: shareWithPasskey ? sharePasskey : null,
+          relativePath: shareItem.relativePath,
+          isFolder: shareItem.isFolder,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Gagal membuat share link')
+      setGeneratedShareUrl(data.shareUrl)
+      if (navigator.clipboard) {
+        await navigator.clipboard.writeText(data.shareUrl)
+        showToast('Link tersalin ke clipboard!')
+      }
+    } catch (err: any) {
+      showToast(err.message, 'error')
+    } finally {
+      setIsSharing(false)
+    }
   }
 
   const savePrivacy = async () => {
@@ -655,6 +703,15 @@ function FilesContent() {
                             <Download size={14} />
                           </a>
                         )}
+                        {user && (
+                          <button
+                            onClick={() => openShareModal(item)}
+                            title="Share link"
+                            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-indigo-600"
+                          >
+                            <Share2 size={14} />
+                          </button>
+                        )}
                         {user?.role?.toLowerCase() === 'admin' && (
                           <button
                             onClick={() => openPrivacy(item)}
@@ -736,6 +793,11 @@ function FilesContent() {
                                   <Download size={15} />
                                 </a>
                               </>
+                            )}
+                            {user && (
+                              <button onClick={() => openShareModal(item)} title="Share link" className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-indigo-600">
+                                <Share2 size={15} />
+                              </button>
                             )}
                             {user?.role?.toLowerCase() === 'admin' && (
                               <button onClick={() => openPrivacy(item)} title="Private access" className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-indigo-600">
@@ -823,6 +885,124 @@ function FilesContent() {
             <div className="mt-6 flex justify-end gap-2">
               <button onClick={() => setDeletingItem(null)} className="rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-100">Cancel</button>
               <button onClick={handleDelete} className="rounded-xl bg-rose-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-rose-700">Move to Trash</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SHARE MODAL */}
+      {isShareModalOpen && shareItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-[1.75rem] bg-white p-6 shadow-2xl ring-1 ring-slate-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Share2 className="text-indigo-600" size={22} />
+                <h3 className="text-lg font-bold text-slate-800">Share Item</h3>
+              </div>
+              <button onClick={() => setIsShareModalOpen(false)} className="rounded-full p-1 text-slate-400 hover:bg-slate-100">
+                <X size={18} />
+              </button>
+            </div>
+
+            <p className="mt-2 truncate text-xs text-slate-500">{shareItem.name}</p>
+
+            {shareItem.isPrivate ? (
+              <div className="mt-4 rounded-xl bg-amber-50 p-4 text-xs font-medium text-amber-800 ring-1 ring-amber-200">
+                ⚠️ Item ini berstatus <strong>Private</strong>. Hanya Admin dan User yang diizinkan yang dapat mengaksesnya meskipun mempunyai link share.
+              </div>
+            ) : (
+              <div className="mt-4 space-y-4">
+                <div>
+                  <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Akses Share</label>
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShareAccessType('PUBLIC')}
+                      className={`rounded-xl p-3 text-left text-xs font-semibold transition ${
+                        shareAccessType === 'PUBLIC'
+                          ? 'bg-indigo-50 text-indigo-700 ring-2 ring-indigo-500'
+                          : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      🌐 Publik
+                      <p className="mt-0.5 text-[10px] font-normal text-slate-400">Siapa saja bisa lihat</p>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setShareAccessType('USER')}
+                      className={`rounded-xl p-3 text-left text-xs font-semibold transition ${
+                        shareAccessType === 'USER'
+                          ? 'bg-indigo-50 text-indigo-700 ring-2 ring-indigo-500'
+                          : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      🔒 User (Harus Login)
+                      <p className="mt-0.5 text-[10px] font-normal text-slate-400">Wajib login akun</p>
+                    </button>
+                  </div>
+                </div>
+
+                {shareAccessType === 'PUBLIC' && (
+                  <div className="space-y-3 rounded-xl bg-slate-50 p-3">
+                    <label className="flex items-center gap-3 text-xs font-semibold text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={shareWithPasskey}
+                        onChange={(e) => setShareWithPasskey(e.target.checked)}
+                        className="h-4 w-4 accent-indigo-600"
+                      />
+                      Gunakan Passkey
+                    </label>
+
+                    {shareWithPasskey && (
+                      <input
+                        type="password"
+                        placeholder="Set Passkey..."
+                        value={sharePasskey}
+                        onChange={(e) => setSharePasskey(e.target.value)}
+                        className="w-full rounded-xl border border-slate-200 p-2.5 text-xs outline-none focus:border-indigo-500"
+                      />
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {generatedShareUrl && (
+              <div className="mt-4">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Link Hasil Share</label>
+                <div className="mt-1 flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={generatedShareUrl}
+                    className="w-full bg-transparent text-xs text-slate-700 outline-none"
+                  />
+                  <button
+                    onClick={async () => {
+                      await navigator.clipboard.writeText(generatedShareUrl)
+                      showToast('Link tersalin!')
+                    }}
+                    className="flex shrink-0 items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700"
+                  >
+                    <Copy size={12} /> Copy
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="mt-6 flex justify-end gap-2">
+              <button onClick={() => setIsShareModalOpen(false)} className="rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-100">
+                Tutup
+              </button>
+              <button
+                onClick={handleGenerateShareLink}
+                disabled={isSharing || (shareAccessType === 'PUBLIC' && shareWithPasskey && !sharePasskey.trim())}
+                className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {isSharing ? 'Generating...' : 'Buat & Salin Link'}
+              </button>
             </div>
           </div>
         </div>

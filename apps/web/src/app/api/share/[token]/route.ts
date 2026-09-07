@@ -4,15 +4,26 @@ import { NextRequest, NextResponse } from 'next/server'
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params
   try {
-    const share = await repository.shareLink.findUnique({ where: { token } })
+    const share = await repository.shareLink.findUnique({
+      where: { token },
+      include: { file: true },
+    })
     if (!share) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     if (share.expiresAt && share.expiresAt < new Date()) {
       return NextResponse.json({ error: 'Expired' }, { status: 410 })
     }
 
+    const file = share.file
     return NextResponse.json({
       id: share.id,
       fileId: share.fileId,
+      name: file.name,
+      isFolder: file.isFolder,
+      relativePath: file.relativePath,
+      mimeType: file.mimeType,
+      size: file.size.toString(),
+      accessType: share.accessType,
+      hasPasskey: Boolean(share.passwordHash),
       readOnly: share.readOnly,
       expiresAt: share.expiresAt,
       createdAt: share.createdAt,

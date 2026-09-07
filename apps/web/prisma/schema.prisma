@@ -24,6 +24,20 @@ model User {
   @@map("users")
 }
 
+model ShareLink {
+  id            String        @id @default(uuid())
+  fileId        String        @map("file_id")
+  token         String        @unique
+  accessType    String        @default("PUBLIC") @map("access_type") // PUBLIC, USER
+  passwordHash  String?       @map("password_hash")
+  expiresAt     DateTime?     @map("expires_at")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  readOnly      Boolean       @default(true) @map("read_only")
+  file          FileMetadata  @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@map("share_links")
+}
+
 model Session {
   id           String   @id @default(uuid())
   userId       String   @map("user_id")
@@ -71,6 +85,7 @@ model FileMetadata {
   parent       FileMetadata? @relation("FolderHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
   children     FileMetadata[] @relation("FolderHierarchy")
   activities   Activity[]
+  shareLinks   ShareLink[]
 
   @@map("file_metadata")
 }
