@@ -90,10 +90,13 @@ export function TabSwitcher({ tabs, activeTab, onChange }: { tabs: string[], act
   )
 }
 
-export function Sidebar() {
+export function Sidebar({ shareToken }: { shareToken?: string } = {}) {
   const pathname = usePathname()
   const router = useRouter()
   const { user } = useAuth()
+  // When a guest arrives via a share link, keep My Files inside that share scope.
+  // Authenticated users retain the normal /files destination.
+  const guestMyFilesPath = shareToken ? `/s/${shareToken}` : '/files'
 
   const handleSignOut = async () => {
     await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
@@ -129,7 +132,7 @@ export function Sidebar() {
             <button onClick={() => setIsMobileOpen(false)} className="absolute top-4 right-4 p-2"><X /></button>
             <Link href="/" className="mb-12 text-center font-extrabold text-3xl tracking-tight text-white">Storva.</Link>
             <nav className="flex-1 space-y-4">
-              {(user ? NAV_ITEMS : [{ label: 'My Files', icon: FolderOpen, path: '/files' }]).map((item) => (
+              {(user ? NAV_ITEMS : [{ label: 'My Files', icon: FolderOpen, path: guestMyFilesPath }]).map((item) => (
                 <Link
                   key={item.label}
                   href={item.path}
@@ -170,7 +173,7 @@ export function Sidebar() {
         </div>
 
         <nav className="flex-1 space-y-4">
-          {(user ? NAV_ITEMS : [{ label: 'My Files', icon: FolderOpen, path: '/files' }]).map((item) => (
+          {(user ? NAV_ITEMS : [{ label: 'My Files', icon: FolderOpen, path: guestMyFilesPath }]).map((item) => (
             <Link
               key={item.label}
               href={item.path}
