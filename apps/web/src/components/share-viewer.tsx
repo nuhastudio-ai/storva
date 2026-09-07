@@ -4,6 +4,8 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Sidebar, RightPanel } from '@/components/dashboard'
 import PdfViewer from '@/components/PdfViewer'
+import PhotoSwipeLightbox from 'photoswipe/lightbox'
+import 'photoswipe/style.css'
 import {
   AlertTriangle, ArrowLeft, ChevronRight, Eye, File, FileText, Folder, Grid, Image as ImageIcon,
   List as ListIcon, Lock, Music, ShieldAlert, Video, X
@@ -109,6 +111,13 @@ export function ShareViewer({ share }: { share: any }) {
   const [previewItem, setPreviewItem] = useState<FileItem | null>(null)
   const [previewText, setPreviewText] = useState('')
 
+  const addDownloadUrl = useCallback((item: Pick<FileItem, 'relativePath' | 'name'>) => {
+    if (!data) return ''
+    const qs = new URLSearchParams({ path: item.relativePath, mode: 'download' })
+    if (data.volumeId != null) qs.set('vol', String(data.volumeId))
+    return `/api/share/${share.token}/content?${qs.toString()}`
+  }, [data, share.token])
+
   useEffect(() => {
     let active = true
     Promise.all([
@@ -157,6 +166,64 @@ export function ShareViewer({ share }: { share: any }) {
     if (data.volumeId != null) qs.set('vol', String(data.volumeId))
     return `/api/share/${share.token}/content?${qs.toString()}`
   }, [data, previewItem, share.token])
+
+  const openImageViewer = useCallback((targetItem: FileItem) => {
+    const directItem: FileItem = {
+      name: data?.name || '',
+      relativePath: data?.relativePath || '',
+      isFolder: false,
+      size: Number(data?.size || 0),
+      mimeType: data?.mimeType || '',
+      category: effectiveCategory({ mimeType: data?.mimeType || '', name: data?.name || '', category: data?.category || 'others' }),
+      extension: '',
+      modifiedAt: '',
+      createdAt: '',
+    }
+    const galleryItems = data?.isFolder
+      ? items.filter((item) => !item.isFolder && effectiveCategory(item) === 'images')
+      : [directItem]
+    const startIndex = Math.max(0, galleryItems.findIndex((item) => item.relativePath === targetItem.relativePath))
+    const dataSource = galleryItems.map((item) => ({
+      src: (() => {
+        const qs = new URLSearchParams({ path: item.relativePath, mode: 'preview' })
+        if (data?.volumeId != null) qs.set('vol', String(data.volumeId))
+        return `/api/share/${share.token}/content?${qs.toString()}`
+      })(),
+      w: 1600,
+      h: 1200,
+      alt: item.name,
+    }))
+    if (!dataSource.length) return
+
+    const lightbox = new PhotoSwipeLightbox({
+      dataSource,
+      pswpModule: () => import('photoswipe'),
+    })
+    lightbox.on('uiRegister', () => {
+      lightbox.pswp?.ui.registerElement({
+        name: 'download-button',
+        order: 8,
+        isButton: true,
+        tagName: 'a',
+        ariaLabel: 'Download image',
+        title: 'Download image',
+        html: '<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4\"/><polyline points=\"7 10 12 15 17 10\"/><line x1=\"12\" x2=\"12\" y1=\"15\" y2=\"3\"/></svg>',
+        onInit: (el) => {
+          const sync = () => {
+            const index = lightbox.pswp?.currIndex ?? 0
+            const current = galleryItems[index]
+            if (!current) return
+            el.setAttribute('href', addDownloadUrl(current))
+            el.setAttribute('download', current.name)
+          }
+          sync()
+          lightbox.pswp?.on('change', sync)
+        },
+      })
+    })
+    lightbox.init()
+    lightbox.loadAndOpen(startIndex)
+  }, [addDownloadUrl, data, items, share.token])
 
   useEffect(() => {
     const candidate = previewItem || (!data?.isFolder ? {
@@ -227,9 +294,13 @@ export function ShareViewer({ share }: { share: any }) {
   const openItem = (item: FileItem) => {
     if (item.isFolder) {
       loadFolder(item.relativePath)
-    } else {
-      setPreviewItem(item)
+      return
     }
+    if (effectiveCategory(item) === 'images') {
+      openImageViewer(item)
+      return
+    }
+    setPreviewItem(item)
   }
 
   const goParent = () => {
@@ -301,7 +372,7 @@ export function ShareViewer({ share }: { share: any }) {
               )}
             </>
           ) : (
-            <FilePreview item={{ name: data.name, relativePath: data.relativePath, isFolder: false, size: Number(data.size), mimeType: data.mimeType, category: data.category, extension: '', modifiedAt: '', createdAt: '' }} src={(() => { const qs = new URLSearchParams({ path: data.relativePath, mode: 'preview' }); if (data.volumeId != null) qs.set('vol', String(data.volumeId)); return `/api/share/${share.token}/content?${qs.toString()}` })()} text={previewText} />
+            <FilePreview item={{ name: data.name, relativePath: data.relativePath, isFolder: false, size: Number(data.size), mimeType: data.mimeType, category: data.category, extension: '', modifiedAt: '', createdAt: '' }} src={(() => { const qs = new URLSearchParams({ path: data.relativePath, mode: 'preview' }); if (data.volumeId != null) qs.set('vol', String(data.volumeId)); return `/api/share/${share.token}/content?${qs.toString()}` })()} text={previewText} onImageClick={() => openImageViewer({ name: data.name, relativePath: data.relativePath, isFolder: false, size: Number(data.size), mimeType: data.mimeType, category: data.category, extension: '', modifiedAt: '', createdAt: '' })} />
           )}
         </section>
         <RightPanel />
@@ -324,10 +395,10 @@ export function ShareViewer({ share }: { share: any }) {
   )
 }
 
-function FilePreview({ item, src, text }: { item: FileItem; src: string; text: string }) {
+function FilePreview({ item, src, text, onImageClick }: { item: FileItem; src: string; text: string; onImageClick?: () => void }) {
   const mimeType = effectiveMime(item)
   const category = effectiveCategory(item)
-  if (category === 'images' || mimeType.startsWith('image/')) return <div className="flex min-h-[55vh] items-center justify-center"><img src={src} alt={item.name} className="max-h-[75vh] max-w-full rounded-xl object-contain shadow-sm" /></div>
+  if (category === 'images' || mimeType.startsWith('image/')) return <div className="flex min-h-[55vh] items-center justify-center"><button type="button" onClick={onImageClick} className="cursor-zoom-in rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-400" title="Open image viewer"><img src={src} alt={item.name} className="max-h-[75vh] max-w-full rounded-xl object-contain shadow-sm" /></button></div>
   if (mimeType === 'application/pdf' || item.name.toLowerCase().endsWith('.pdf')) return <div className="mx-auto min-h-[70vh] max-w-4xl overflow-hidden rounded-xl bg-white shadow-sm"><PdfViewer src={src} fileName={item.name} /></div>
   if (category === 'videos' || mimeType.startsWith('video/')) return <div className="flex min-h-[55vh] items-center justify-center"><video src={src} controls playsInline className="max-h-[72vh] max-w-full rounded-xl bg-black shadow-sm" /></div>
   if (category === 'audio' || mimeType.startsWith('audio/')) return <div className="mx-auto flex min-h-[35vh] max-w-xl flex-col items-center justify-center rounded-2xl bg-white p-8 shadow-sm"><Music className="text-violet-500" size={48} /><p className="mt-4 text-base font-semibold text-slate-800">{item.name}</p><audio src={src} controls className="mt-6 w-full" /></div>

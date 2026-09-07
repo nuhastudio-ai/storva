@@ -94,6 +94,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     if (mode === 'list') {
       return proxyToAgent(req, 'files', agentSearch)
     }
+    if (mode === 'download') {
+      return proxyToAgent(req, 'download', agentSearch)
+    }
     return proxyToAgent(req, 'preview', agentSearch)
   } catch (err: any) {
     return NextResponse.json({ error: err.message || 'Share content unavailable' }, { status: 500 })
