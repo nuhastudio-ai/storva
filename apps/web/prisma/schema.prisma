@@ -87,3 +87,14 @@ model Activity {
 
   @@map("activities")
 }
+
+model PrivacyRule {
+  id           String   @id @default(uuid())
+  relativePath String   @unique @map("relative_path")
+  isPrivate    Boolean  @default(true) @map("is_private")
+  allowedUsers String   @default("[]") @map("allowed_users") // JSON array of user IDs
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("privacy_rules")
+}
